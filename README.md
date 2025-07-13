@@ -4,11 +4,7 @@
 - `npm install`
 
 # Running
-node capture.js
+`node capture.js`
 
 # Debugging
 Change the log level in eufyConfig
-
-# Example output
-```
-```
