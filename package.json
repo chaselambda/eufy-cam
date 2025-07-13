@@ -1,0 +1,16 @@
+{
+  "name": "funthing",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "capture.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.0",
+    "eufy-security-client": "^3.2.0"
+  }
+}
