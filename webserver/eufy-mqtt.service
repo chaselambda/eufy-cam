@@ -1,0 +1,20 @@
+[Unit]
+Description=Eufy MQTT Broker and Healthcheck
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/eufy-cam
+ExecStart=/usr/bin/node /home/pi/eufy-cam/webserver/server.js
+Restart=always
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment=NODE_ENV=production
+EnvironmentFile=/home/pi/eufy-cam/.env
+
+[Install]
+WantedBy=multi-user.target
