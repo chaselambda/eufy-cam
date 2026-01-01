@@ -1,16 +1,27 @@
 {
-  "name": "funthing",
+  "name": "eufy-package-detector",
   "version": "1.0.0",
-  "description": "",
+  "description": "Package detection system using Eufy doorbell camera and Claude AI",
   "type": "module",
   "main": "capture.js",
   "scripts": {
+    "capture": "node capture.js",
+    "server": "node webserver/server.js",
+    "mqtt-client": "node webserver/mqtt-client.js",
+    "colorize": "node scripts/colorize-logs.js",
+    "colorize:follow": "node scripts/colorize-logs.js -f",
+    "simulate-package:exists": "node scripts/simulate-package.js true",
+    "simulate-package:clear": "node scripts/simulate-package.js false",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "aedes": "^0.51.3",
     "dotenv": "^17.2.0",
-    "eufy-security-client": "^3.2.0"
+    "eufy-security-client": "^3.2.0",
+    "mqtt": "^5.3.0",
+    "winston": "^3.11.0"
   }
 }

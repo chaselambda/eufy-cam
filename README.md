@@ -1,10 +1,175 @@
-# Setup
-- `cp .env.default .env`
-  - Then put your eufy login into this file
-- `npm install`
+# Eufy Package Detector
 
-# Running
-`node capture.js`
+Package detection system that captures images from a Eufy doorbell camera, uses Claude AI to detect packages, and notifies ESP8266 microcontrollers via MQTT.
 
-# Debugging
-Change the log level in eufyConfig
+## Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Eufy Camera    │────▶│   capture.js    │────▶│  Claude API     │
+│  (Doorbell)     │     │  (Node.js)      │     │  (Vision)       │
+└─────────────────┘     └────────┬────────┘     └─────────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │   MQTT Broker   │
+                        │   (Aedes)       │
+                        └────────┬────────┘
+                                 │
+            ┌────────────────────┼────────────────────┐
+            ▼                    ▼                    ▼
+    ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+    │   ESP8266     │   │   ESP8266     │   │   ESP8266     │
+    │   Button 1    │   │   Button 2    │   │   Button N    │
+    └───────────────┘   └───────────────┘   └───────────────┘
+```
+
+## Components
+
+| Component | Description |
+|-----------|-------------|
+| `capture.js` | Main script - captures frames, detects packages, publishes to MQTT |
+| `webserver/server.js` | MQTT broker (port 2000) + HTTP healthcheck (port 3000) |
+| `webserver/mqtt-client.js` | Simulated MCU for testing without hardware |
+| `button_firmware/` | ESP8266 PlatformIO project for LED notification buttons |
+| `lib/logger.js` | Winston structured logging |
+| `lib/package-detector.js` | Claude API integration for package detection |
+| `lib/mqtt-publisher.js` | MQTT client for publishing detection results |
+
+## Setup
+
+### 1. Environment Configuration
+
+```bash
+cp .env.default .env
+```
+
+Edit `.env` with your credentials:
+- `EUFY_USERNAME` / `EUFY_PASSWORD` - Eufy account credentials
+- `ANTHROPIC_API_KEY` - Claude API key
+- MQTT settings (defaults work for local broker)
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Reference Image
+
+Place a photo of your empty doorstep at:
+```
+reference/doorstep-reference.jpg
+```
+
+This is used by the AI to compare against captured frames.
+
+### 4. ESP8266 Firmware (Optional)
+
+Edit `button_firmware/src/main.cpp` with your WiFi and MQTT settings, then:
+
+```bash
+cd button_firmware
+make upload
+```
+
+## Running
+
+### Start the MQTT Server
+
+```bash
+npm run server
+# Starts MQTT broker on :2000 and HTTP healthcheck on :3000
+```
+
+### Run Capture (One-Shot)
+
+```bash
+npm run capture
+```
+
+### Run Capture Loop
+
+```bash
+./webserver/run-capture.sh 60   # Every 60 seconds
+```
+
+### Test with Simulated MCU
+
+```bash
+npm run mqtt-client
+# Press 'b' to simulate button press
+# Press 'q' to quit
+```
+
+### View Colorized Logs
+
+```bash
+npm run colorize              # View existing logs
+npm run colorize:follow       # Follow log updates
+```
+
+## MQTT Topics
+
+| Topic | Direction | Payload |
+|-------|-----------|---------|
+| `package_exists` | Publish | `{"exists": true/false, "timestamp": "..."}` |
+| `user_handled` | Sub/Pub | `{"handled": true, "timestamp": "..."}` |
+
+## Healthcheck
+
+```bash
+curl http://localhost:3000/healthcheck
+```
+
+Returns `200 OK` if capture has succeeded in the last 30 minutes.
+
+## Systemd Service
+
+Install the service for production:
+
+```bash
+sudo cp webserver/eufy-mqtt.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable eufy-mqtt
+sudo systemctl start eufy-mqtt
+```
+
+## Directory Structure
+
+```
+eufy-cam/
+├── capture.js              # Main capture + detection script
+├── package.json            # Dependencies
+├── .env                    # Credentials (gitignored)
+├── .env.default            # Template
+├── lib/
+│   ├── logger.js           # Winston logging
+│   ├── package-detector.js # Claude API
+│   └── mqtt-publisher.js   # MQTT client
+├── scripts/
+│   └── colorize-logs.js    # Log viewer
+├── webserver/
+│   ├── server.js           # MQTT broker + healthcheck
+│   ├── mqtt-client.js      # Simulated MCU
+│   ├── run-capture.sh      # Periodic capture script
+│   └── eufy-mqtt.service   # Systemd service
+├── button_firmware/
+│   ├── platformio.ini
+│   ├── src/main.cpp
+│   ├── Makefile
+│   └── README.md
+├── reference/
+│   └── doorstep-reference.jpg  # Reference image (gitignored)
+├── logs/
+│   └── capture.log         # JSON log output (gitignored)
+└── captured/
+    ├── snapshots/          # JPEG frames
+    └── videos/             # Raw video files
+```
+
+## Debugging
+
+- Change log level in `eufyConfig` in `capture.js`
+- View logs: `npm run colorize:follow`
+- Check healthcheck: `curl localhost:3000/healthcheck`

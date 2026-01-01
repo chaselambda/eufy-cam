@@ -3,3 +3,6 @@ captured/
 .DS_Store
 persistent.json
 .env
+logs/
+reference/
+data/
