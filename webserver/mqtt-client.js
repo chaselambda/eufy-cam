@@ -1,3 +1,4 @@
+import "dotenv/config";
 import mqtt from "mqtt";
 import readline from "readline";
 

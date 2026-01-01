@@ -9,6 +9,7 @@
  *   node scripts/simulate-package.js false     # Package removed (exists: false)
  */
 
+import "dotenv/config";
 import mqtt from "mqtt";
 
 const MQTT_HOST = process.env.MQTT_HOST || "localhost";

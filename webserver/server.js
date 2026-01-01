@@ -1,3 +1,4 @@
+import "dotenv/config";
 import Aedes from "aedes";
 import net from "net";
 import http from "http";
@@ -8,7 +9,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const MQTT_PORT = 2000;
+const MQTT_PORT = process.env.MQTT_PORT || 2000;
+const MQTT_USER = process.env.MQTT_USER || "user";
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
 const HTTP_PORT = 3000;
 const LOGS_DIR = path.join(__dirname, "..", "logs");
 const CAPTURE_LOG = path.join(LOGS_DIR, "capture.log");
@@ -24,7 +27,7 @@ const mqttServer = net.createServer(aedes.handle);
 // Authentication
 aedes.authenticate = (client, username, password, callback) => {
   const pwd = password ? Buffer.from(password).toString() : "";
-  if (username === "user" && pwd === "pass") {
+  if (username === MQTT_USER && pwd === MQTT_PASSWORD) {
     console.log(`[MQTT] Auth success for ${client.id}`);
     return callback(null, true);
   }
