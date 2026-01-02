@@ -6,3 +6,4 @@ persistent.json
 logs/
 reference/
 data/
+button_firmware/src/config.h

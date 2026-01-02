@@ -2,6 +2,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include "config.h"
 
 // Hardware pins
 constexpr int LED_PIN = D2;    // GPIO4
@@ -12,14 +13,6 @@ void setLed(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
 
 // Button has pull-up, so pressing grounds it (reads LOW)
 bool isButtonPressed() { return digitalRead(BUTTON_PIN) == LOW; }
-
-// WiFi and MQTT configuration - update these for your network
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* mqtt_server = "YOUR_MQTT_SERVER_IP"; // e.g., "192.168.1.100"
-constexpr int mqtt_port = 2000;
-const char* mqtt_user = "user";
-const char* mqtt_password = "pass";
 
 // MQTT Topics
 const char* TOPIC_PACKAGE_EXISTS = "package_exists";
@@ -48,10 +41,10 @@ void setup_wifi() {
   delay(10);
   Serial.println();
   Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.println(WIFI_SSID);
 
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -147,7 +140,7 @@ void reconnect() {
     String clientId = "ESP8266-Button-";
     clientId += String(random(0xffff), HEX);
 
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
+    if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
       Serial.println("connected");
 
       // Subscribe to topics
@@ -231,7 +224,7 @@ void setup() {
 
   // Setup WiFi and MQTT
   setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
+  client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callback);
 
   Serial.println("Setup complete");

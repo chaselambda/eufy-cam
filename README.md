@@ -66,7 +66,17 @@ This is used by the AI to compare against captured frames.
 
 ### 4. ESP8266 Firmware (Optional)
 
-Edit `button_firmware/src/main.cpp` with your WiFi and MQTT settings, then:
+```bash
+cd button_firmware/src
+cp config.h.default config.h
+```
+
+Edit `config.h` with your WiFi and MQTT settings:
+- `WIFI_SSID` / `WIFI_PASSWORD` - Your WiFi credentials
+- `MQTT_SERVER` - IP address of the machine running the MQTT broker
+- `MQTT_PORT` / `MQTT_USER` / `MQTT_PASSWORD` - Must match your `.env`
+
+Then flash:
 
 ```bash
 cd button_firmware
@@ -148,7 +158,8 @@ eufy-cam/
 │   ├── package-detector.js # Claude API
 │   └── mqtt-publisher.js   # MQTT client
 ├── scripts/
-│   └── colorize-logs.js    # Log viewer
+│   ├── colorize-logs.js    # Log viewer
+│   └── simulate-package.js # Simulate package detection
 ├── webserver/
 │   ├── server.js           # MQTT broker + healthcheck
 │   ├── mqtt-client.js      # Simulated MCU
@@ -156,7 +167,10 @@ eufy-cam/
 │   └── eufy-mqtt.service   # Systemd service
 ├── button_firmware/
 │   ├── platformio.ini
-│   ├── src/main.cpp
+│   ├── src/
+│   │   ├── main.cpp
+│   │   ├── config.h.default  # Template
+│   │   └── config.h          # Your settings (gitignored)
 │   ├── Makefile
 │   └── README.md
 ├── reference/
