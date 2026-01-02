@@ -300,7 +300,7 @@ async function captureVideo() {
   return captureState;
 }
 
-async function main() {
+async function runOnce() {
   let packageDetected = false;
 
   try {
@@ -346,11 +346,49 @@ async function main() {
   }
 
   logger.info("Video capture completed successfully");
-  logger.info("Check your directory for:");
-  logger.info(`  - ${VIDEOS_DIR}/capture_*.h264/h265 (raw video)`);
-  logger.info(`  - ${SNAPSHOTS_DIR}/frame_*.jpg (JPEG images)`);
+}
 
-  process.exit(0);
+/**
+ * Parse duration string like "60s", "5m" to milliseconds
+ */
+function parseDuration(str) {
+  const match = str.match(/^(\d+)(s|m|h)?$/);
+  if (!match) return null;
+
+  const value = parseInt(match[1]);
+  const unit = match[2] || 's';
+
+  switch (unit) {
+    case 's': return value * 1000;
+    case 'm': return value * 60 * 1000;
+    case 'h': return value * 60 * 60 * 1000;
+    default: return null;
+  }
+}
+
+async function main() {
+  // Parse --loop argument
+  const loopIndex = process.argv.indexOf('--loop');
+
+  if (loopIndex !== -1 && process.argv[loopIndex + 1]) {
+    const intervalMs = parseDuration(process.argv[loopIndex + 1]);
+
+    if (!intervalMs) {
+      console.error('Invalid --loop duration. Use format: 60s, 5m, 1h');
+      process.exit(1);
+    }
+
+    logger.info(`Running in loop mode, interval: ${intervalMs / 1000}s`);
+
+    while (true) {
+      await runOnce();
+      logger.info(`Waiting ${intervalMs / 1000}s until next capture...`);
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  } else {
+    await runOnce();
+    process.exit(0);
+  }
 }
 
 main();

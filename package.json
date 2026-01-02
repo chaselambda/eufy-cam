@@ -6,6 +6,7 @@
   "main": "capture.js",
   "scripts": {
     "capture": "node capture.js",
+    "capture:loop": "node capture.js --loop 60s",
     "server": "node webserver/server.js",
     "mqtt-client": "node webserver/mqtt-client.js",
     "colorize": "node scripts/colorize-logs.js",

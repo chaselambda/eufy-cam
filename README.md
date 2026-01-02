@@ -101,7 +101,8 @@ npm run capture
 ### Run Capture Loop
 
 ```bash
-./webserver/run-capture.sh 60   # Every 60 seconds
+npm run capture:loop            # Every 60 seconds (default)
+node capture.js --loop 30s      # Custom interval
 ```
 
 ### Test with Simulated MCU
@@ -134,15 +135,31 @@ curl http://localhost:3000/healthcheck
 
 Returns `200 OK` if capture has succeeded in the last 30 minutes.
 
-## Systemd Service
+## Systemd Services
 
-Install the service for production:
+Install both services for production:
 
 ```bash
+# Copy service files
 sudo cp webserver/eufy-mqtt.service /etc/systemd/system/
+sudo cp webserver/eufy-capture.service /etc/systemd/system/
+
+# Reload and enable
 sudo systemctl daemon-reload
-sudo systemctl enable eufy-mqtt
-sudo systemctl start eufy-mqtt
+sudo systemctl enable eufy-mqtt eufy-capture
+sudo systemctl start eufy-mqtt eufy-capture
+```
+
+| Service | Description |
+|---------|-------------|
+| `eufy-mqtt` | MQTT broker + HTTP healthcheck |
+| `eufy-capture` | Capture loop (runs every 60s) |
+
+View logs:
+
+```bash
+journalctl -u eufy-mqtt -f
+journalctl -u eufy-capture -f
 ```
 
 ## Directory Structure
@@ -163,8 +180,8 @@ eufy-cam/
 ├── webserver/
 │   ├── server.js           # MQTT broker + healthcheck
 │   ├── mqtt-client.js      # Simulated MCU
-│   ├── run-capture.sh      # Periodic capture script
-│   └── eufy-mqtt.service   # Systemd service
+│   ├── eufy-mqtt.service   # Systemd service (broker)
+│   └── eufy-capture.service # Systemd service (capture loop)
 ├── button_firmware/
 │   ├── platformio.ini
 │   ├── src/

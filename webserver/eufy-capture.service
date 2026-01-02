@@ -1,0 +1,20 @@
+[Unit]
+Description=Eufy Package Detection Capture Loop
+After=network.target eufy-mqtt.service
+Requires=eufy-mqtt.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/eufy-cam
+ExecStart=/root/.nvm/versions/node/v20.10.0/bin/node /root/eufy-cam/capture.js --loop 60s
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+EnvironmentFile=/root/eufy-cam/.env
+
+[Install]
+WantedBy=multi-user.target
