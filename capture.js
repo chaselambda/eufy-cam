@@ -1,9 +1,8 @@
+import "dotenv/config";
 import { EufySecurity, Device, Camera } from "eufy-security-client";
 import fs from "fs";
 import { spawn } from "child_process";
 import path from "path";
-import dotenv from "dotenv";
-dotenv.config();
 
 import { logger, RUN_ID } from "./lib/logger.js";
 import { detectPackage } from "./lib/package-detector.js";
