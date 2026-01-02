@@ -11,6 +11,11 @@ import {
   publishPackageStatus,
   disconnect as mqttDisconnect,
 } from "./lib/mqtt-publisher.js";
+import {
+  cropAndScale,
+  addTextOverlay,
+  cleanupTemp,
+} from "./lib/image-processor.js";
 
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
@@ -317,12 +322,39 @@ async function runOnce() {
       if (latestFrame) {
         logger.info(`Analyzing latest frame: ${latestFrame}`);
 
-        // Detect packages
-        packageDetected = await detectPackage(latestFrame);
+        // Crop and scale for API call
+        let croppedPath = null;
+        try {
+          croppedPath = await cropAndScale(latestFrame);
+          logger.info(`Created cropped/scaled image: ${croppedPath}`);
+        } catch (cropError) {
+          logger.warn(`Could not crop image, using original: ${cropError.message}`);
+          croppedPath = latestFrame;
+        }
+
+        // Detect packages using cropped image
+        const result = await detectPackage(croppedPath);
+        packageDetected = result.package_detected;
+
         logger.event("package_detection", "Package detection complete", {
           detected: packageDetected,
+          confidence: result.confidence,
+          description: result.description,
           frame: latestFrame,
         });
+
+        // Add text overlay to original image
+        try {
+          const annotatedPath = await addTextOverlay(latestFrame, result);
+          logger.info(`Created annotated image: ${annotatedPath}`);
+        } catch (overlayError) {
+          logger.warn(`Could not add text overlay: ${overlayError.message}`);
+        }
+
+        // Clean up temp cropped file
+        if (croppedPath !== latestFrame) {
+          cleanupTemp(croppedPath);
+        }
       } else {
         logger.warn("No frames captured, cannot detect packages");
       }
