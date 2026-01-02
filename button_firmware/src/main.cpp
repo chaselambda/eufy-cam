@@ -189,22 +189,22 @@ void checkCooldown() {
 void checkButton() {
   bool pressed = isButtonPressed();
 
-  // Debounce
   if (pressed != lastButtonPressed) {
     lastDebounceTime = millis();
   }
 
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
-    // Button state has been stable
-    if (pressed && !lastButtonPressed) {
-      // Button just pressed
-      if (packageExists && !inCooldown) {
-        handleButtonPress();
+    // Button state has been stable long enough
+    if (pressed != lastButtonPressed) {
+      lastButtonPressed = pressed;
+      if (pressed) {
+        // Button just pressed
+        if (packageExists && !inCooldown) {
+          handleButtonPress();
+        }
       }
     }
   }
-
-  lastButtonPressed = pressed;
 }
 
 void setup() {
