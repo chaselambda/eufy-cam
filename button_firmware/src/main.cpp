@@ -4,8 +4,14 @@
 #include <ArduinoJson.h>
 
 // Hardware pins
-constexpr int LED_PIN = D2;    // GPIO4 - active HIGH
-constexpr int BUTTON_PIN = D1; // GPIO5 - HIGH when pressed
+constexpr int LED_PIN = D2;    // GPIO4
+constexpr int BUTTON_PIN = D1; // GPIO5
+
+// LED is connected to 5V, so pulling LOW turns it on
+void setLed(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
+
+// Button has pull-up, so pressing grounds it (reads LOW)
+bool isButtonPressed() { return digitalRead(BUTTON_PIN) == LOW; }
 
 // WiFi and MQTT configuration - update these for your network
 const char* ssid = "YOUR_WIFI_SSID";
@@ -35,7 +41,7 @@ unsigned long lastLedToggle = 0;
 bool ledState = false;
 
 // Button debounce
-bool lastButtonState = LOW;
+bool lastButtonPressed = false;
 unsigned long lastDebounceTime = 0;
 
 void setup_wifi() {
@@ -83,7 +89,7 @@ void handleButtonPress() {
   cooldownStartTime = millis();
 
   // Turn off LED during cooldown
-  digitalWrite(LED_PIN, LOW);
+  setLed(false);
   ledState = false;
 }
 
@@ -117,7 +123,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // If package no longer exists, clear cooldown and turn off LED
     if (!exists) {
       inCooldown = false;
-      digitalWrite(LED_PIN, LOW);
+      setLed(false);
       ledState = false;
     }
   } else if (strcmp(topic, TOPIC_USER_HANDLED) == 0) {
@@ -127,7 +133,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       Serial.println("Received user_handled - entering cooldown");
       inCooldown = true;
       cooldownStartTime = millis();
-      digitalWrite(LED_PIN, LOW);
+      setLed(false);
       ledState = false;
     }
   }
@@ -161,7 +167,7 @@ void updateLed() {
   if (!packageExists || inCooldown) {
     // LED should be off
     if (ledState) {
-      digitalWrite(LED_PIN, LOW);
+      setLed(false);
       ledState = false;
     }
     return;
@@ -172,7 +178,7 @@ void updateLed() {
   if (now - lastLedToggle >= LED_FLASH_INTERVAL_MS) {
     lastLedToggle = now;
     ledState = !ledState;
-    digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+    setLed(ledState);
   }
 }
 
@@ -188,24 +194,24 @@ void checkCooldown() {
 }
 
 void checkButton() {
-  bool reading = digitalRead(BUTTON_PIN);
+  bool pressed = isButtonPressed();
 
   // Debounce
-  if (reading != lastButtonState) {
+  if (pressed != lastButtonPressed) {
     lastDebounceTime = millis();
   }
 
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
     // Button state has been stable
-    if (reading == HIGH && lastButtonState == LOW) {
-      // Button just pressed (rising edge)
+    if (pressed && !lastButtonPressed) {
+      // Button just pressed
       if (packageExists && !inCooldown) {
         handleButtonPress();
       }
     }
   }
 
-  lastButtonState = reading;
+  lastButtonPressed = pressed;
 }
 
 void setup() {
@@ -220,9 +226,8 @@ void setup() {
 
   // Configure pins
   pinMode(LED_PIN, OUTPUT);
-  pinMode(BUTTON_PIN, INPUT);
-
-  digitalWrite(LED_PIN, LOW);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  setLed(false);
 
   // Setup WiFi and MQTT
   setup_wifi();
