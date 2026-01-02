@@ -34,7 +34,8 @@ unsigned long lastLedToggle = 0;
 bool ledState = false;
 
 // Button debounce
-bool lastButtonPressed = false;
+bool lastReading = false;    // Raw reading from last loop
+bool buttonPressed = false;  // Debounced confirmed state
 unsigned long lastDebounceTime = 0;
 
 void setup_wifi() {
@@ -187,18 +188,20 @@ void checkCooldown() {
 }
 
 void checkButton() {
-  bool pressed = isButtonPressed();
+  bool reading = isButtonPressed();
 
-  if (pressed != lastButtonPressed) {
+  // Reset debounce timer when reading changes
+  if (reading != lastReading) {
     lastDebounceTime = millis();
   }
+  lastReading = reading;
 
+  // After stable for DEBOUNCE_DELAY_MS, update confirmed state
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
-    // Button state has been stable long enough
-    if (pressed != lastButtonPressed) {
-      lastButtonPressed = pressed;
-      if (pressed) {
-        // Button just pressed
+    if (reading != buttonPressed) {
+      buttonPressed = reading;
+      if (buttonPressed) {
+        // Rising edge - button just pressed
         if (packageExists && !inCooldown) {
           handleButtonPress();
         }
