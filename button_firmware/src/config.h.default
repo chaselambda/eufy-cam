@@ -1,0 +1,17 @@
+// Copy this file to config.h and fill in your values
+// config.h is gitignored and will not be committed
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi credentials
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+
+// MQTT broker settings (must match server .env)
+#define MQTT_SERVER "YOUR_MQTT_SERVER_IP"  // e.g., "192.168.1.100"
+#define MQTT_PORT 2000
+#define MQTT_USER "user"
+#define MQTT_PASSWORD "pass"
+
+#endif
