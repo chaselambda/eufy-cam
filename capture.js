@@ -4,7 +4,7 @@ import fs from "fs";
 import { spawn } from "child_process";
 import path from "path";
 
-import { logger, RUN_ID } from "./lib/logger.js";
+import { logger } from "./lib/logger.js";
 import { detectPackage } from "./lib/package-detector.js";
 import {
   createClient,
@@ -221,7 +221,7 @@ function findTargetCamera(cameras) {
 }
 
 async function captureVideo() {
-  logger.event("capture_start", "Starting capture process", { runId: RUN_ID });
+  logger.event("capture_start", "Starting capture process");
   ensureDirectories();
 
   const eufy = await EufySecurity.initialize(eufyConfig, consoleLogger);

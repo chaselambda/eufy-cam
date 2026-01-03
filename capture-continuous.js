@@ -19,7 +19,7 @@ import fs from "fs";
 import { spawn } from "child_process";
 import path from "path";
 
-import { logger, RUN_ID } from "./lib/logger.js";
+import { logger } from "./lib/logger.js";
 
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
@@ -156,7 +156,7 @@ async function shutdown(targetSerial) {
 }
 
 async function main() {
-  logger.info("Starting continuous capture", { runId: RUN_ID });
+  logger.info("Starting continuous capture");
   ensureDirectories();
 
   eufy = await EufySecurity.initialize(eufyConfig, consoleLogger);
