@@ -9,13 +9,10 @@
  *   node scripts/simulate-package.js false     # Package removed (exists: false)
  */
 
-import mqtt from "mqtt";
 import {
-  MQTT_HOST,
-  MQTT_PORT,
-  MQTT_USER,
-  MQTT_PASSWORD,
-  TOPIC_PACKAGE_EXISTS,
+  createClient,
+  publishPackageStatus,
+  disconnect,
 } from "../lib/mqtt-client.js";
 
 // Parse command-line argument (default to true if not provided)
@@ -23,55 +20,8 @@ const arg = process.argv[2];
 const packageExists = arg === undefined || arg.toLowerCase() !== "false";
 
 console.log(`Simulating package detection: exists=${packageExists}`);
-console.log(`Connecting to MQTT broker at ${MQTT_HOST}:${MQTT_PORT}...`);
 
-const clientId = `simulate-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-
-const client = mqtt.connect(`mqtt://${MQTT_HOST}:${MQTT_PORT}`, {
-  clientId,
-  username: MQTT_USER,
-  password: MQTT_PASSWORD,
-  connectTimeout: 10000,
-  reconnectPeriod: 0,
-});
-
-client.on("connect", () => {
-  console.log("Connected to MQTT broker");
-
-  const message = JSON.stringify({
-    exists: packageExists,
-    timestamp: new Date().toISOString(),
-  });
-
-  client.publish(
-    TOPIC_PACKAGE_EXISTS,
-    message,
-    { qos: 1, retain: true },
-    (err) => {
-      if (err) {
-        console.error("Failed to publish:", err.message);
-        process.exit(1);
-      }
-
-      console.log(`Published to ${TOPIC_PACKAGE_EXISTS}: ${message}`);
-
-      client.end(false, () => {
-        console.log("Disconnected");
-        process.exit(0);
-      });
-    }
-  );
-});
-
-client.on("error", (err) => {
-  console.error("MQTT connection error:", err.message);
-  process.exit(1);
-});
-
-// Timeout after 10 seconds
-setTimeout(() => {
-  if (!client.connected) {
-    console.error("Connection timeout");
-    process.exit(1);
-  }
-}, 10000);
+const client = await createClient("simulate");
+await publishPackageStatus(client, packageExists);
+await disconnect(client);
+process.exit(0);

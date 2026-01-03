@@ -9,7 +9,7 @@
     "capture:loop": "node capture.js --loop 60s",
     "capture:continuous": "node capture-continuous.js",
     "server": "node webserver/server.js",
-    "simulate-led-button": "node webserver/simulate-led-button.js",
+    "simulate-led-button": "node scripts/simulate-led-button.js",
     "colorize": "node scripts/colorize-logs.js",
     "colorize:follow": "node scripts/colorize-logs.js -f",
     "simulate-package:exists": "node scripts/simulate-package.js true",
