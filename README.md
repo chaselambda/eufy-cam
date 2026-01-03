@@ -30,7 +30,7 @@ Package detection system that captures images from a Eufy doorbell camera, uses 
 |-----------|-------------|
 | `capture.js` | Main script - captures frames, detects packages, publishes to MQTT |
 | `webserver/server.js` | MQTT broker (port 2000) + HTTP healthcheck (port 3000) |
-| `webserver/simulate-led-button.js` | Simulated MCU for testing without hardware |
+| `scripts/simulate-led-button.js` | Simulated MCU for testing without hardware |
 | `button_firmware/` | ESP8266 PlatformIO project for LED notification buttons |
 | `lib/logger.js` | Winston structured logging |
 | `lib/package-detector.js` | Claude API integration for package detection |
@@ -113,13 +113,6 @@ npm run simulate-led-button
 # Press 'q' to quit
 ```
 
-### View Colorized Logs
-
-```bash
-npm run colorize              # View existing logs
-npm run colorize:follow       # Follow log updates
-```
-
 ## MQTT Topics
 
 | Topic | Direction | Payload |
@@ -175,11 +168,10 @@ eufy-cam/
 │   ├── package-detector.js # Claude API
 │   └── mqtt-client.js      # MQTT constants and client utilities
 ├── scripts/
-│   ├── colorize-logs.js    # Log viewer
-│   └── simulate-package.js # Simulate package detection
+│   ├── simulate-led-button.js # Simulated MCU for testing
+│   └── simulate-package.js    # Simulate package detection
 ├── webserver/
 │   ├── server.js           # MQTT broker + healthcheck
-│   ├── simulate-led-button.js # Simulated MCU
 │   ├── eufy-mqtt.service   # Systemd service (broker)
 │   └── eufy-capture.service # Systemd service (capture loop)
 ├── button_firmware/
@@ -192,8 +184,6 @@ eufy-cam/
 │   └── README.md
 ├── reference/
 │   └── doorstep-reference.jpg  # Reference image (gitignored)
-├── logs/
-│   └── capture.log         # JSON log output (gitignored)
 └── captured/
     ├── snapshots/          # JPEG frames
     └── videos/             # Raw video files
@@ -201,6 +191,6 @@ eufy-cam/
 
 ## Debugging
 
-- Change log level in `eufyConfig` in `capture.js`
-- View logs: `npm run colorize:follow`
+- Set `LOG_TIMESTAMPS=1` to include timestamps in log output
 - Check healthcheck: `curl localhost:3000/healthcheck`
+- View service logs: `journalctl -u eufy-capture -f`

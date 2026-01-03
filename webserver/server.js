@@ -1,10 +1,10 @@
-import "dotenv/config";
 import Aedes from "aedes";
 import net from "net";
 import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { logger } from "../lib/logger.js";
 import {
   TOPIC_PACKAGE_EXISTS,
   TOPIC_USER_HANDLED,
@@ -59,7 +59,7 @@ function writeCooldownState(cooldownActive) {
     startedAt: formatPSTTimestamp(),
   };
   fs.writeFileSync(COOLDOWN_STATE_FILE, JSON.stringify(state, null, 2));
-  console.log(`[Cooldown] State written: inCooldown=${cooldownActive}`);
+  logger.info("Cooldown state written", { inCooldown: cooldownActive });
 }
 
 function publishLedFlashing(flashing) {
@@ -70,7 +70,7 @@ function publishLedFlashing(flashing) {
     qos: 1,
     retain: true,
   });
-  console.log(`[LED] Published led_flashing: ${flashing}`);
+  logger.info("Published led_flashing", { flashing });
 }
 
 function updateLedState() {
@@ -94,12 +94,12 @@ function startCooldown() {
     inCooldown = false;
     writeCooldownState(false);
     cooldownTimer = null;
-    console.log("[Cooldown] Cooldown period ended - waiting for next capture.js check");
+    logger.info("Cooldown period ended - waiting for next capture.js check");
     // Don't publish led_flashing here - let capture.js send package_exists
     // to trigger LED if package is still present
   }, COOLDOWN_DURATION_MS);
 
-  console.log(`[Cooldown] Started ${COOLDOWN_DURATION_MS / 1000}s cooldown`);
+  logger.info("Cooldown started", { durationSeconds: COOLDOWN_DURATION_MS / 1000 });
 }
 
 function clearCooldown() {
@@ -109,7 +109,7 @@ function clearCooldown() {
   }
   inCooldown = false;
   writeCooldownState(false);
-  console.log("[Cooldown] Cleared early (package removed)");
+  logger.info("Cooldown cleared early (package removed)");
   // Note: updateLedState() called separately when package_exists changes
 }
 
@@ -124,33 +124,35 @@ const mqttServer = net.createServer(aedes.handle);
 aedes.authenticate = (client, username, password, callback) => {
   const pwd = password ? Buffer.from(password).toString() : "";
   if (username === MQTT_USER && pwd === MQTT_PASSWORD) {
-    console.log(`[MQTT] Auth success for ${client.id}`);
+    logger.info("MQTT auth success", { clientId: client.id });
     return callback(null, true);
   }
-  console.log(`[MQTT] Auth failed for ${client?.id}`);
+  logger.warn("MQTT auth failed", { clientId: client?.id });
   const error = new Error("Authentication failed");
   return callback(error, false);
 };
 
 // Connection events
 aedes.on("client", (client) => {
-  console.log(`[MQTT] Client connected: ${client?.id}`);
+  logger.info("MQTT client connected", { clientId: client?.id });
 });
 
 aedes.on("clientDisconnect", (client) => {
-  console.log(`[MQTT] Client disconnected: ${client?.id}`);
+  logger.info("MQTT client disconnected", { clientId: client?.id });
 });
 
 aedes.on("subscribe", (subscriptions, client) => {
   const topics = subscriptions.map((s) => s.topic).join(", ");
-  console.log(`[MQTT] ${client?.id} subscribed to: ${topics}`);
+  logger.info("MQTT client subscribed", { clientId: client?.id, topics });
 });
 
 aedes.on("publish", (packet, client) => {
   if (client) {
-    console.log(
-      `[MQTT] ${client.id} published to ${packet.topic}: ${packet.payload.toString()}`
-    );
+    logger.info("MQTT message published", {
+      clientId: client.id,
+      topic: packet.topic,
+      payload: packet.payload.toString(),
+    });
 
     // Handle state-changing topics
     try {
@@ -162,9 +164,9 @@ aedes.on("publish", (packet, client) => {
         packageExists = newPackageExists;
 
         if (stateChanged) {
-          console.log(`[State] packageExists changed to: ${packageExists}`);
+          logger.info("Package state changed", { packageExists });
           if (!packageExists) {
-            console.log("[MQTT] Package removed - clearing cooldown");
+            logger.info("Package removed - clearing cooldown");
             clearCooldown();
           }
         }
@@ -173,7 +175,7 @@ aedes.on("publish", (packet, client) => {
         // and capture.js confirms package still exists
         updateLedState();
       } else if (packet.topic === TOPIC_USER_HANDLED && payload.handled === true) {
-        console.log("[MQTT] User handled package - starting cooldown");
+        logger.info("User handled package - starting cooldown");
         startCooldown();
       }
     } catch (e) {
@@ -183,7 +185,7 @@ aedes.on("publish", (packet, client) => {
 });
 
 mqttServer.listen(MQTT_PORT, () => {
-  console.log(`[MQTT] Broker running on port ${MQTT_PORT}`);
+  logger.info("MQTT broker running", { port: MQTT_PORT });
 });
 
 // ============================================
@@ -291,8 +293,10 @@ const httpServer = http.createServer((req, res) => {
 });
 
 httpServer.listen(HTTP_PORT, () => {
-  console.log(`[HTTP] Healthcheck server running on port ${HTTP_PORT}`);
-  console.log(`[HTTP] Endpoints: http://localhost:${HTTP_PORT}/healthcheck`);
+  logger.info("HTTP healthcheck server running", {
+    port: HTTP_PORT,
+    endpoint: `http://localhost:${HTTP_PORT}/healthcheck`,
+  });
 });
 
 // ============================================
@@ -300,7 +304,7 @@ httpServer.listen(HTTP_PORT, () => {
 // ============================================
 
 function shutdown() {
-  console.log("\nShutting down...");
+  logger.info("Shutting down...");
 
   // Clear cooldown timer
   if (cooldownTimer) {
@@ -309,21 +313,21 @@ function shutdown() {
   }
 
   aedes.close(() => {
-    console.log("[MQTT] Broker closed");
+    logger.info("MQTT broker closed");
   });
 
   mqttServer.close(() => {
-    console.log("[MQTT] TCP server closed");
+    logger.info("MQTT TCP server closed");
   });
 
   httpServer.close(() => {
-    console.log("[HTTP] Server closed");
+    logger.info("HTTP server closed");
     process.exit(0);
   });
 
   // Force exit after 5 seconds
   setTimeout(() => {
-    console.log("Forcing exit...");
+    logger.warn("Forcing exit...");
     process.exit(1);
   }, 5000);
 }
@@ -331,9 +335,7 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.log("\n===========================================");
-console.log("  Eufy Package Detection Server Started");
-console.log("===========================================");
-console.log(`  MQTT Broker: localhost:${MQTT_PORT}`);
-console.log(`  HTTP Health: http://localhost:${HTTP_PORT}/healthcheck`);
-console.log("===========================================\n");
+logger.info("Eufy Package Detection Server Started", {
+  mqttBroker: `localhost:${MQTT_PORT}`,
+  httpHealth: `http://localhost:${HTTP_PORT}/healthcheck`,
+});

@@ -10,8 +10,6 @@
     "capture:continuous": "node capture-continuous.js",
     "server": "node webserver/server.js",
     "simulate-led-button": "node scripts/simulate-led-button.js",
-    "colorize": "node scripts/colorize-logs.js",
-    "colorize:follow": "node scripts/colorize-logs.js -f",
     "simulate-package:exists": "node scripts/simulate-package.js true",
     "simulate-package:clear": "node scripts/simulate-package.js false",
     "eval": "node package-detection-eval/run-eval.js",
