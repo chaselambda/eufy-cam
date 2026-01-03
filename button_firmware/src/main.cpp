@@ -20,7 +20,7 @@ const char* TOPIC_USER_HANDLED = "user_handled";
 
 // Timing constants
 constexpr unsigned long LED_FLASH_INTERVAL_MS = 500;
-constexpr unsigned long DEBOUNCE_DELAY_MS = 50;
+constexpr unsigned long DEBOUNCE_DELAY_MS = 20;
 
 // State
 WiFiClient espClient;
