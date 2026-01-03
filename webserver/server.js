@@ -23,7 +23,7 @@ const CAPTURE_LOG = path.join(LOGS_DIR, "capture.log");
 const DATA_DIR = path.join(__dirname, "..", "data");
 const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
 const HEALTHCHECK_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
-const COOLDOWN_DURATION_MS = 10 * 1000; // 2 minutes
+const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
 // ============================================
 // LED State Management
