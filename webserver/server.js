@@ -173,8 +173,12 @@ aedes.on("publish", (packet, client) => {
         // and capture.js confirms package still exists
         updateLedState();
       } else if (packet.topic === TOPIC_USER_HANDLED && payload.handled === true) {
-        logger.info("User handled package - starting cooldown");
-        startCooldown();
+        if (packageExists) {
+          logger.info("User handled package - starting cooldown");
+          startCooldown();
+        } else {
+          logger.info("User button press ignored - no package present");
+        }
       }
     } catch (e) {
       // Ignore non-JSON messages
