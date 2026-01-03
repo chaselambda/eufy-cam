@@ -30,6 +30,7 @@ const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 let packageExists = false;
 let cooldownTimer = null;
 let lastPackageExistsAt = null; // timestamp of last package_exists message
+const serverStartedAt = Date.now();
 
 // Track ESP8266 client connections
 const espClients = new Set();
@@ -238,22 +239,25 @@ function checkEspClients() {
 }
 
 function checkCaptureHealth() {
-  if (!lastPackageExistsAt) {
-    return {
-      healthy: false,
-      reason: "No package_exists message received yet",
-      lastCheck: null,
-    };
-  }
-
   const now = Date.now();
-  const timeSince = now - lastPackageExistsAt;
+
+  // If no message received yet, use server start time as baseline
+  const baselineTime = lastPackageExistsAt || serverStartedAt;
+  const timeSince = now - baselineTime;
 
   if (timeSince <= HEALTHCHECK_WINDOW_MS) {
     return {
       healthy: true,
-      lastCheck: new Date(lastPackageExistsAt).toISOString(),
-      secondsAgo: Math.floor(timeSince / 1000),
+      lastCheck: lastPackageExistsAt ? new Date(lastPackageExistsAt).toISOString() : null,
+      secondsAgo: lastPackageExistsAt ? Math.floor(timeSince / 1000) : null,
+    };
+  }
+
+  if (!lastPackageExistsAt) {
+    return {
+      healthy: false,
+      reason: "No package_exists message received since startup",
+      lastCheck: null,
     };
   }
 
