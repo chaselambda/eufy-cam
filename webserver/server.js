@@ -249,7 +249,7 @@ function checkCaptureHealth() {
     return {
       healthy: true,
       lastCheck: lastPackageExistsAt ? new Date(lastPackageExistsAt).toISOString() : null,
-      secondsAgo: lastPackageExistsAt ? Math.floor(timeSince / 1000) : null,
+      secondsAgo: Math.floor(timeSince / 1000),
     };
   }
 
