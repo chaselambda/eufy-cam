@@ -146,7 +146,7 @@ aedes.on("subscribe", (subscriptions, client) => {
 
 aedes.on("publish", (packet, client) => {
   if (client) {
-    logger.info("MQTT message published", {
+    logger.info("MQTT message received", {
       clientId: client.id,
       topic: packet.topic,
       payload: packet.payload.toString(),
