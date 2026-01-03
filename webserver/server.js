@@ -3,6 +3,7 @@ import net from "net";
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { logger } from "../lib/logger.js";
 import {
@@ -18,8 +19,6 @@ const MQTT_PORT = process.env.MQTT_PORT || 2000;
 const MQTT_USER = process.env.MQTT_USER || "user";
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
 const HTTP_PORT = 3000;
-const LOGS_DIR = path.join(__dirname, "..", "logs");
-const CAPTURE_LOG = path.join(LOGS_DIR, "capture.log");
 const DATA_DIR = path.join(__dirname, "..", "data");
 const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
 const HEALTHCHECK_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
@@ -193,50 +192,32 @@ mqttServer.listen(MQTT_PORT, () => {
 
 function checkLogForRecentSuccess() {
   try {
-    if (!fs.existsSync(CAPTURE_LOG)) {
+    // Query journalctl for the most recent capture_success event
+    const output = execSync(
+      "journalctl -u eufy-capture --since '30 min ago' --output=short-unix | grep capture_success | tail -1",
+      { encoding: "utf-8", timeout: 5000 }
+    ).trim();
+
+    if (!output) {
       return {
         healthy: false,
-        reason: "No capture log file found",
+        reason: "No capture_success events in last 30 minutes",
         lastCheck: null,
       };
     }
 
-    const content = fs.readFileSync(CAPTURE_LOG, "utf-8");
-    const lines = content.trim().split("\n").filter(Boolean);
-
-    if (lines.length === 0) {
+    // Parse unix timestamp from start of line (e.g., "1767419199.991898 eufy-cronjob ...")
+    const timestamp = parseFloat(output.split(" ")[0]);
+    if (isNaN(timestamp)) {
       return {
         healthy: false,
-        reason: "Capture log is empty",
+        reason: "Could not parse timestamp from journalctl",
         lastCheck: null,
       };
     }
 
-    // Find the most recent capture_success event
+    const lastSuccessTime = timestamp * 1000; // Convert to milliseconds
     const now = Date.now();
-    let lastSuccessTime = null;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        const entry = JSON.parse(lines[i]);
-        if (entry.event === "capture_success") {
-          lastSuccessTime = new Date(entry.timestamp).getTime();
-          break;
-        }
-      } catch {
-        // Skip malformed lines
-        continue;
-      }
-    }
-
-    if (!lastSuccessTime) {
-      return {
-        healthy: false,
-        reason: "No capture_success events found in log",
-        lastCheck: null,
-      };
-    }
-
     const timeSinceSuccess = now - lastSuccessTime;
 
     if (timeSinceSuccess <= HEALTHCHECK_WINDOW_MS) {
@@ -253,9 +234,17 @@ function checkLogForRecentSuccess() {
       lastCheck: new Date(lastSuccessTime).toISOString(),
     };
   } catch (error) {
+    // execSync throws if command returns non-zero (e.g., grep finds nothing)
+    if (error.status === 1) {
+      return {
+        healthy: false,
+        reason: "No capture_success events in last 30 minutes",
+        lastCheck: null,
+      };
+    }
     return {
       healthy: false,
-      reason: `Error reading log: ${error.message}`,
+      reason: `Error querying journalctl: ${error.message}`,
       lastCheck: null,
     };
   }
