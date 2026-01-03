@@ -183,7 +183,25 @@ npm run simulate-led-button
 curl http://localhost:3000/healthcheck
 ```
 
-Returns `200 OK` if capture has succeeded in the last 30 minutes.
+Returns `200 OK` if both conditions are met:
+- **Capture**: `package_exists` message received within the last 2 minutes
+- **ESP8266 clients**: At least 4 clients with `ESP8266` prefix connected (5 minute grace period after dropping below)
+
+Example response:
+```json
+{
+  "healthy": true,
+  "capture": {
+    "lastMessageAt": "2025-01-03T12:00:00.000Z",
+    "secondsAgo": 45
+  },
+  "espClients": {
+    "count": 4,
+    "required": 4,
+    "belowForSec": null
+  }
+}
+```
 
 ## Directory Structure
 
