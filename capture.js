@@ -7,10 +7,10 @@ import path from "path";
 import { logger, RUN_ID } from "./lib/logger.js";
 import { detectPackage } from "./lib/package-detector.js";
 import {
-  connect as mqttConnect,
+  createClient,
   publishPackageStatus,
-  disconnect as mqttDisconnect,
-} from "./lib/mqtt-publisher.js";
+  disconnect,
+} from "./lib/mqtt-client.js";
 import { addTextOverlay } from "./lib/image-processor.js";
 
 const OUTPUT_ROOT = "./captured";
@@ -328,6 +328,7 @@ function checkCooldownState() {
 
 async function runOnce() {
   let packageDetected = false;
+  let mqttClient = null;
 
   // Check cooldown state before capture
   if (checkCooldownState()) {
@@ -337,7 +338,7 @@ async function runOnce() {
 
   try {
     // Connect to MQTT broker
-    await mqttConnect();
+    mqttClient = await createClient("capture");
 
     // Capture video and frames
     const captureState = await captureVideo();
@@ -373,7 +374,7 @@ async function runOnce() {
     }
 
     // Publish result to MQTT
-    await publishPackageStatus(packageDetected);
+    await publishPackageStatus(mqttClient, packageDetected);
 
     // Log success event for healthcheck
     logger.event("capture_success", "Capture and detection complete", {
@@ -386,7 +387,7 @@ async function runOnce() {
     });
   } finally {
     // Disconnect from MQTT
-    await mqttDisconnect();
+    await disconnect(mqttClient);
   }
 
   logger.info("Video capture completed successfully");

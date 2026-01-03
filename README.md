@@ -30,11 +30,11 @@ Package detection system that captures images from a Eufy doorbell camera, uses 
 |-----------|-------------|
 | `capture.js` | Main script - captures frames, detects packages, publishes to MQTT |
 | `webserver/server.js` | MQTT broker (port 2000) + HTTP healthcheck (port 3000) |
-| `webserver/mqtt-client.js` | Simulated MCU for testing without hardware |
+| `webserver/simulate-led-button.js` | Simulated MCU for testing without hardware |
 | `button_firmware/` | ESP8266 PlatformIO project for LED notification buttons |
 | `lib/logger.js` | Winston structured logging |
 | `lib/package-detector.js` | Claude API integration for package detection |
-| `lib/mqtt-publisher.js` | MQTT client for publishing detection results |
+| `lib/mqtt-client.js` | MQTT constants and client utilities |
 
 ## Setup
 
@@ -108,7 +108,7 @@ node capture.js --loop 30s      # Custom interval
 ### Test with Simulated MCU
 
 ```bash
-npm run mqtt-client
+npm run simulate-led-button
 # Press 'b' to simulate button press
 # Press 'q' to quit
 ```
@@ -173,13 +173,13 @@ eufy-cam/
 ├── lib/
 │   ├── logger.js           # Winston logging
 │   ├── package-detector.js # Claude API
-│   └── mqtt-publisher.js   # MQTT client
+│   └── mqtt-client.js      # MQTT constants and client utilities
 ├── scripts/
 │   ├── colorize-logs.js    # Log viewer
 │   └── simulate-package.js # Simulate package detection
 ├── webserver/
 │   ├── server.js           # MQTT broker + healthcheck
-│   ├── mqtt-client.js      # Simulated MCU
+│   ├── simulate-led-button.js # Simulated MCU
 │   ├── eufy-mqtt.service   # Systemd service (broker)
 │   └── eufy-capture.service # Systemd service (capture loop)
 ├── button_firmware/

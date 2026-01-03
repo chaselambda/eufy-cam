@@ -9,15 +9,14 @@
  *   node scripts/simulate-package.js false     # Package removed (exists: false)
  */
 
-import "dotenv/config";
 import mqtt from "mqtt";
-
-const MQTT_HOST = process.env.MQTT_HOST || "localhost";
-const MQTT_PORT = process.env.MQTT_PORT || 2000;
-const MQTT_USER = process.env.MQTT_USER || "user";
-const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
-
-const TOPIC_PACKAGE_EXISTS = "package_exists";
+import {
+  MQTT_HOST,
+  MQTT_PORT,
+  MQTT_USER,
+  MQTT_PASSWORD,
+  TOPIC_PACKAGE_EXISTS,
+} from "../lib/mqtt-client.js";
 
 // Parse command-line argument (default to true if not provided)
 const arg = process.argv[2];

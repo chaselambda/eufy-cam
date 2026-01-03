@@ -5,6 +5,11 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  TOPIC_PACKAGE_EXISTS,
+  TOPIC_USER_HANDLED,
+  TOPIC_LED_FLASHING,
+} from "../lib/mqtt-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,14 +24,6 @@ const DATA_DIR = path.join(__dirname, "..", "data");
 const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
 const HEALTHCHECK_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 const COOLDOWN_DURATION_MS = 10 * 1000; // 2 minutes
-
-// ============================================
-// MQTT Topics
-// ============================================
-
-const TOPIC_PACKAGE_EXISTS = "package_exists";
-const TOPIC_USER_HANDLED = "user_handled";
-const TOPIC_LED_FLASHING = "led_flashing";
 
 // ============================================
 // LED State Management

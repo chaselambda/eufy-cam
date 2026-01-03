@@ -1,14 +1,13 @@
-import "dotenv/config";
 import mqtt from "mqtt";
 import readline from "readline";
-
-const MQTT_HOST = process.env.MQTT_HOST || "localhost";
-const MQTT_PORT = process.env.MQTT_PORT || 2000;
-const MQTT_USER = process.env.MQTT_USER || "user";
-const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
-
-const TOPIC_LED_FLASHING = "led_flashing";
-const TOPIC_USER_HANDLED = "user_handled";
+import {
+  MQTT_HOST,
+  MQTT_PORT,
+  MQTT_USER,
+  MQTT_PASSWORD,
+  TOPIC_LED_FLASHING,
+  TOPIC_USER_HANDLED,
+} from "../lib/mqtt-client.js";
 
 // State
 let ledFlashing = false;
