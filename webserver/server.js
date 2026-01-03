@@ -3,7 +3,6 @@ import net from "net";
 import http from "http";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { logger } from "../lib/logger.js";
 import {
@@ -21,7 +20,7 @@ const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
 const HTTP_PORT = 3000;
 const DATA_DIR = path.join(__dirname, "..", "data");
 const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
-const HEALTHCHECK_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+const HEALTHCHECK_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
 // ============================================
@@ -30,6 +29,7 @@ const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
 let packageExists = false;
 let cooldownTimer = null;
+let lastPackageExistsAt = null; // timestamp of last package_exists message
 
 // Track ESP8266 client connections
 const espClients = new Set();
@@ -175,6 +175,7 @@ aedes.on("publish", (packet, client) => {
       const payload = JSON.parse(packet.payload.toString());
 
       if (packet.topic === TOPIC_PACKAGE_EXISTS) {
+        lastPackageExistsAt = Date.now();
         const newPackageExists = payload.exists === true;
         const stateChanged = newPackageExists !== packageExists;
         packageExists = newPackageExists;
@@ -236,64 +237,31 @@ function checkEspClients() {
   };
 }
 
-function checkLogForRecentSuccess() {
-  try {
-    // Query journalctl for the most recent capture_success event
-    const output = execSync(
-      "journalctl -u eufy-capture --since '30 min ago' --output=short-unix | grep capture_success | tail -1",
-      { encoding: "utf-8", timeout: 5000 }
-    ).trim();
-
-    if (!output) {
-      return {
-        healthy: false,
-        reason: "No capture_success events in last 30 minutes",
-        lastCheck: null,
-      };
-    }
-
-    // Parse unix timestamp from start of line (e.g., "1767419199.991898 eufy-cronjob ...")
-    const timestamp = parseFloat(output.split(" ")[0]);
-    if (isNaN(timestamp)) {
-      return {
-        healthy: false,
-        reason: "Could not parse timestamp from journalctl",
-        lastCheck: null,
-      };
-    }
-
-    const lastSuccessTime = timestamp * 1000; // Convert to milliseconds
-    const now = Date.now();
-    const timeSinceSuccess = now - lastSuccessTime;
-
-    if (timeSinceSuccess <= HEALTHCHECK_WINDOW_MS) {
-      return {
-        healthy: true,
-        lastCheck: new Date(lastSuccessTime).toISOString(),
-        secondsAgo: Math.floor(timeSinceSuccess / 1000),
-      };
-    }
-
+function checkCaptureHealth() {
+  if (!lastPackageExistsAt) {
     return {
       healthy: false,
-      reason: `Last capture_success was ${Math.floor(timeSinceSuccess / 1000 / 60)} minutes ago`,
-      lastCheck: new Date(lastSuccessTime).toISOString(),
-    };
-  } catch (error) {
-    // execSync throws if command returns non-zero (e.g., grep finds nothing)
-    if (error.status === 1) {
-      return {
-        healthy: false,
-        reason: "No capture_success events in last 30 minutes",
-        lastCheck: null,
-      };
-    }
-    return {
-      healthy: false,
-      reason: `Error querying journalctl: ${error.message}`,
+      reason: "No package_exists message received yet",
       lastCheck: null,
     };
   }
+
+  const now = Date.now();
+  const timeSince = now - lastPackageExistsAt;
+
+  if (timeSince <= HEALTHCHECK_WINDOW_MS) {
+    return {
+      healthy: true,
+      lastCheck: new Date(lastPackageExistsAt).toISOString(),
+      secondsAgo: Math.floor(timeSince / 1000),
+    };
+  }
+
+  return {
+    healthy: false,
+    reason: `Last package_exists was ${Math.floor(timeSince / 1000 / 60)} minutes ago`,
+    lastCheck: new Date(lastPackageExistsAt).toISOString(),
+  };
 }
 
 const httpServer = http.createServer((req, res) => {
@@ -302,7 +270,7 @@ const httpServer = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   if (req.url === "/healthcheck" || req.url === "/health") {
-    const captureHealth = checkLogForRecentSuccess();
+    const captureHealth = checkCaptureHealth();
     const espHealth = checkEspClients();
 
     const healthy = captureHealth.healthy && espHealth.healthy;
@@ -316,8 +284,10 @@ const httpServer = http.createServer((req, res) => {
     const health = {
       healthy,
       reason: reasons.length > 0 ? reasons.join("; ") : undefined,
-      lastCheck: captureHealth.lastCheck,
-      secondsAgo: captureHealth.secondsAgo,
+      capture: {
+        lastMessageAt: captureHealth.lastCheck,
+        secondsAgo: captureHealth.secondsAgo,
+      },
       espClients: {
         count: espHealth.count,
         required: espHealth.required,
