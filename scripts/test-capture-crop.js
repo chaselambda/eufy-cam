@@ -14,7 +14,7 @@
  *   5. Save as <input>_annotated.jpg
  */
 
-import { cropAndScale, addTextOverlay, cleanupTemp } from "./lib/image-processor.js";
+import { cropAndScale, addTextOverlay, cleanupTemp } from "../lib/image-processor.js";
 import fs from "fs";
 import path from "path";
 
