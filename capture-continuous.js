@@ -23,7 +23,7 @@ const DEVICE_DISCOVERY_TIMEOUT_MS = 5000;
 const TARGET_CAMERA_NAME = "775";
 
 if (!process.env.EUFY_USERNAME || !process.env.EUFY_PASSWORD) {
-  console.error("Error: EUFY_USERNAME and EUFY_PASSWORD must be set in .env");
+  logger.error("EUFY_USERNAME and EUFY_PASSWORD must be set in .env");
   process.exit(1);
 }
 
@@ -100,8 +100,8 @@ function createFFmpegProcess(codecExt, device) {
 }
 
 async function handleLivestreamStart(station, device, metadata, videoStream, audioStream) {
-  console.log(`\nLivestream started for ${device.getName()}`);
-  console.log("Stream metadata:", metadata);
+  logger.info("Livestream started", { device: device.getName() });
+  logger.debug("Stream metadata", { metadata });
 
   const codecExt = metadata.videoCodec === 1 ? "h265" : "h264";
   ffmpegProcess = createFFmpegProcess(codecExt, device);
@@ -112,7 +112,7 @@ async function handleLivestreamStart(station, device, metadata, videoStream, aud
     }
   });
 
-  console.log("\nCapturing frames continuously. Press Ctrl+C to stop.\n");
+  logger.info("Capturing frames continuously. Press Ctrl+C to stop.");
 }
 
 function findTargetCamera(cameras) {
@@ -127,7 +127,7 @@ function findTargetCamera(cameras) {
 }
 
 async function shutdown(targetSerial) {
-  console.log("\n\nShutting down...");
+  logger.info("Shutting down...");
 
   if (ffmpegProcess && !ffmpegProcess.stdin.destroyed) {
     ffmpegProcess.stdin.end();
@@ -146,8 +146,7 @@ async function shutdown(targetSerial) {
     eufy.close();
   }
 
-  console.log(`\nTotal frames captured: ${frameCount}`);
-  console.log(`Frames saved to: ${SNAPSHOTS_DIR}/`);
+  logger.info("Capture complete", { totalFrames: frameCount, outputDir: SNAPSHOTS_DIR });
   process.exit(0);
 }
 

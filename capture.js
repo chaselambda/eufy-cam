@@ -27,11 +27,11 @@ const TARGET_CAMERA_NAME = "775";
 
 // Load Eufy credentials from environment variables
 if (!process.env.EUFY_USERNAME) {
-  console.error("Error: EUFY_USERNAME environment variable is not set.");
+  logger.error("EUFY_USERNAME environment variable is not set");
   process.exit(1);
 }
 if (!process.env.EUFY_PASSWORD) {
-  console.error("Error: EUFY_PASSWORD environment variable is not set.");
+  logger.error("EUFY_PASSWORD environment variable is not set");
   process.exit(1);
 }
 
@@ -83,26 +83,25 @@ function createFFmpegProcess(codecExt, device, timestamp) {
   const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
 
   ffmpegProcess.stdout.on("data", (data) => {
-    console.log(`FFmpeg stdout: ${data}`);
+    logger.debug("FFmpeg stdout", { data: data.toString() });
   });
 
   ffmpegProcess.stderr.on("data", (data) => {
     const message = data.toString();
-    console.log(`FFmpeg stderr: ${message}`);
     if (message.includes("frame=")) {
       const frameMatch = message.match(/frame=\s*(\d+)/);
       if (frameMatch) {
-        console.log(`📸 Captured frame ${frameMatch[1]}`);
+        logger.info("Captured frame", { frame: frameMatch[1] });
       }
     }
   });
 
   ffmpegProcess.on("close", (code) => {
-    console.log(`FFmpeg process exited with code ${code}`);
+    logger.debug("FFmpeg process exited", { code });
   });
 
   ffmpegProcess.on("error", (err) => {
-    console.error("FFmpeg process error:", err);
+    logger.error("FFmpeg process error", { error: err.message });
   });
 
   return ffmpegProcess;
@@ -117,8 +116,8 @@ async function handleLivestreamStart(
   eufy,
   captureState
 ) {
-  console.log(`Livestream started for ${device.getName()}`);
-  console.log("Stream metadata:", metadata);
+  logger.info("Livestream started", { device: device.getName() });
+  logger.debug("Stream metadata", { metadata });
 
   const codecExt = metadata.videoCodec === 1 ? "h265" : "h264";
   const timestamp = Date.now();
@@ -128,7 +127,7 @@ async function handleLivestreamStart(
     captureState.ffmpegProcess = ffmpegProcess;
 
     videoStream.on("data", (chunk) => {
-      console.log(`Received video chunk of size: ${chunk.length} bytes`);
+      logger.debug("Received video chunk", { size: chunk.length });
       if (!ffmpegProcess.stdin.destroyed) {
         ffmpegProcess.stdin.write(chunk);
       }
@@ -419,7 +418,7 @@ async function main() {
     const intervalMs = parseDuration(process.argv[loopIndex + 1]);
 
     if (!intervalMs) {
-      console.error('Invalid --loop duration. Use format: 60s, 5m, 1h');
+      logger.error("Invalid --loop duration. Use format: 60s, 5m, 1h");
       process.exit(1);
     }
 
