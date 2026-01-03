@@ -214,6 +214,7 @@ eufy-cam/
 │   └── README.md
 └── captured/
     ├── snapshots/          # JPEG frames
+    ├── snapshots_annotated/ # Frames with detection overlay
     └── videos/             # Raw video files
 ```
 
@@ -221,6 +222,11 @@ eufy-cam/
 
 - Set `LOG_TIMESTAMPS=1` to include timestamps in log output
 - Check healthcheck: `curl localhost:3000/healthcheck`
+- Debug false positives by reviewing annotated images:
+  ```bash
+  rsync -avz root@YOUR_SERVER:/root/eufy-cam/captured/snapshots_annotated /tmp/
+  open /tmp/snapshots_annotated  # macOS
+  ```
 
 ## Known Issues
 
