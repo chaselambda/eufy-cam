@@ -31,6 +31,12 @@ const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 let packageExists = false;
 let cooldownTimer = null;
 
+// Track ESP8266 client connections
+const espClients = new Set();
+const MIN_ESP_CLIENTS = 4;
+const ESP_GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
+let espBelowMinSince = null; // timestamp when count first dropped below MIN_ESP_CLIENTS
+
 function inCooldown() {
   return cooldownTimer !== null;
 }
@@ -133,10 +139,22 @@ aedes.authenticate = (client, username, password, callback) => {
 // Connection events
 aedes.on("client", (client) => {
   logger.info("MQTT client connected", { clientId: client?.id });
+  if (client?.id?.startsWith("ESP8266")) {
+    espClients.add(client.id);
+    if (espClients.size >= MIN_ESP_CLIENTS) {
+      espBelowMinSince = null; // Reset timer when we hit minimum
+    }
+  }
 });
 
 aedes.on("clientDisconnect", (client) => {
   logger.info("MQTT client disconnected", { clientId: client?.id });
+  if (client?.id) {
+    espClients.delete(client.id);
+    if (espClients.size < MIN_ESP_CLIENTS && espBelowMinSince === null) {
+      espBelowMinSince = Date.now(); // Start timer when we drop below minimum
+    }
+  }
 });
 
 aedes.on("subscribe", (subscriptions, client) => {
@@ -193,6 +211,30 @@ mqttServer.listen(MQTT_PORT, () => {
 // ============================================
 // HTTP Healthcheck Server
 // ============================================
+
+function checkEspClients() {
+  const now = Date.now();
+  const count = espClients.size;
+
+  // Healthy if we have enough clients, or if we dropped below recently (within grace period)
+  let healthy = true;
+  let belowForMs = null;
+
+  if (count < MIN_ESP_CLIENTS) {
+    if (espBelowMinSince === null) {
+      espBelowMinSince = now; // First check after startup
+    }
+    belowForMs = now - espBelowMinSince;
+    healthy = belowForMs < ESP_GRACE_PERIOD_MS;
+  }
+
+  return {
+    healthy,
+    count,
+    required: MIN_ESP_CLIENTS,
+    belowForMs,
+  };
+}
 
 function checkLogForRecentSuccess() {
   try {
@@ -260,8 +302,30 @@ const httpServer = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   if (req.url === "/healthcheck" || req.url === "/health") {
-    const health = checkLogForRecentSuccess();
-    res.writeHead(health.healthy ? 200 : 503);
+    const captureHealth = checkLogForRecentSuccess();
+    const espHealth = checkEspClients();
+
+    const healthy = captureHealth.healthy && espHealth.healthy;
+    const reasons = [];
+    if (!captureHealth.healthy) reasons.push(captureHealth.reason);
+    if (!espHealth.healthy) {
+      const mins = Math.floor(espHealth.belowForMs / 1000 / 60);
+      reasons.push(`Only ${espHealth.count}/${espHealth.required} ESP8266 clients for ${mins}+ min`);
+    }
+
+    const health = {
+      healthy,
+      reason: reasons.length > 0 ? reasons.join("; ") : undefined,
+      lastCheck: captureHealth.lastCheck,
+      secondsAgo: captureHealth.secondsAgo,
+      espClients: {
+        count: espHealth.count,
+        required: espHealth.required,
+        belowForSec: espHealth.belowForMs ? Math.floor(espHealth.belowForMs / 1000) : null,
+      },
+    };
+
+    res.writeHead(healthy ? 200 : 503);
     res.end(JSON.stringify(health, null, 2));
   } else if (req.url === "/") {
     res.writeHead(200);
