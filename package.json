@@ -12,8 +12,10 @@
     "simulate-led-button": "node scripts/simulate-led-button.js",
     "simulate-package:exists": "node scripts/simulate-package.js true",
     "simulate-package:clear": "node scripts/simulate-package.js false",
-    "systemd-reload": "sudo systemctl daemon-reload && sudo systemctl enable eufy-mqtt eufy-capture",
-    "systemd-restart": "sudo systemctl restart eufy-mqtt eufy-capture",
+    "systemd:reload": "sudo systemctl daemon-reload && sudo systemctl enable eufy-mqtt eufy-capture",
+    "systemd:restart": "sudo systemctl restart eufy-mqtt eufy-capture",
+    "logs:mqtt": "journalctl -u eufy-mqtt -f",
+    "logs:capture": "journalctl -u eufy-capture -f",
     "eval": "node package-detection-eval/run-eval.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
