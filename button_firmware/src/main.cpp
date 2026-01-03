@@ -15,21 +15,18 @@ void setLed(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
 bool isButtonPressed() { return digitalRead(BUTTON_PIN) == LOW; }
 
 // MQTT Topics
-const char* TOPIC_PACKAGE_EXISTS = "package_exists";
+const char* TOPIC_LED_FLASHING = "led_flashing";
 const char* TOPIC_USER_HANDLED = "user_handled";
 
 // Timing constants
 constexpr unsigned long LED_FLASH_INTERVAL_MS = 500;
-constexpr unsigned long COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 constexpr unsigned long DEBOUNCE_DELAY_MS = 50;
 
 // State
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-bool packageExists = false;
-bool inCooldown = false;
-unsigned long cooldownStartTime = 0;
+bool ledFlashing = false;
 unsigned long lastLedToggle = 0;
 bool ledState = false;
 
@@ -78,11 +75,9 @@ void handleButtonPress() {
   Serial.println("Button pressed - user handled package");
   publishUserHandled();
 
-  // Enter cooldown
-  inCooldown = true;
-  cooldownStartTime = millis();
-
-  // Turn off LED during cooldown
+  // Immediately stop flashing for low latency UX
+  // Server will confirm via led_flashing: false
+  ledFlashing = false;
   setLed(false);
   ledState = false;
 }
@@ -108,25 +103,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  if (strcmp(topic, TOPIC_PACKAGE_EXISTS) == 0) {
-    bool exists = doc["exists"] | false;
-    Serial.print("Package exists: ");
-    Serial.println(exists ? "true" : "false");
-    packageExists = exists;
+  if (strcmp(topic, TOPIC_LED_FLASHING) == 0) {
+    bool flashing = doc["flashing"] | false;
+    Serial.print("LED flashing: ");
+    Serial.println(flashing ? "true" : "false");
+    ledFlashing = flashing;
 
-    // If package no longer exists, clear cooldown and turn off LED
-    if (!exists) {
-      inCooldown = false;
-      setLed(false);
-      ledState = false;
-    }
-  } else if (strcmp(topic, TOPIC_USER_HANDLED) == 0) {
-    // Someone (another button or ourselves) handled the package
-    bool handled = doc["handled"] | false;
-    if (handled) {
-      Serial.println("Received user_handled - entering cooldown");
-      inCooldown = true;
-      cooldownStartTime = millis();
+    // If LED should stop flashing, turn it off immediately
+    if (!flashing) {
       setLed(false);
       ledState = false;
     }
@@ -144,10 +128,9 @@ void reconnect() {
     if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
       Serial.println("connected");
 
-      // Subscribe to topics
-      client.subscribe(TOPIC_PACKAGE_EXISTS);
-      client.subscribe(TOPIC_USER_HANDLED);
-      Serial.println("Subscribed to package_exists and user_handled");
+      // Subscribe to led_flashing only - server handles all state logic
+      client.subscribe(TOPIC_LED_FLASHING);
+      Serial.println("Subscribed to led_flashing");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -158,7 +141,7 @@ void reconnect() {
 }
 
 void updateLed() {
-  if (!packageExists || inCooldown) {
+  if (!ledFlashing) {
     // LED should be off
     if (ledState) {
       setLed(false);
@@ -167,23 +150,12 @@ void updateLed() {
     return;
   }
 
-  // Package exists and not in cooldown - flash LED
+  // LED should be flashing
   unsigned long now = millis();
   if (now - lastLedToggle >= LED_FLASH_INTERVAL_MS) {
     lastLedToggle = now;
     ledState = !ledState;
     setLed(ledState);
-  }
-}
-
-void checkCooldown() {
-  if (inCooldown) {
-    unsigned long elapsed = millis() - cooldownStartTime;
-    if (elapsed >= COOLDOWN_DURATION_MS) {
-      Serial.println("Cooldown complete");
-      inCooldown = false;
-      // LED will resume flashing in updateLed() if package still exists
-    }
   }
 }
 
@@ -202,7 +174,7 @@ void checkButton() {
       buttonPressed = reading;
       if (buttonPressed) {
         // Rising edge - button just pressed
-        if (packageExists && !inCooldown) {
+        if (ledFlashing) {
           handleButtonPress();
         }
       }
@@ -242,9 +214,6 @@ void loop() {
 
   // Check button
   checkButton();
-
-  // Update cooldown state
-  checkCooldown();
 
   // Update LED
   updateLed();

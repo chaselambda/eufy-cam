@@ -7,14 +7,11 @@ const MQTT_PORT = process.env.MQTT_PORT || 2000;
 const MQTT_USER = process.env.MQTT_USER || "user";
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
 
-const TOPIC_PACKAGE_EXISTS = "package_exists";
+const TOPIC_LED_FLASHING = "led_flashing";
 const TOPIC_USER_HANDLED = "user_handled";
 
 // State
-let packageExists = false;
-let inCooldown = false;
-let cooldownTimer = null;
-const COOLDOWN_DURATION_MS = 10 * 1000; // 10 seconds
+let ledFlashing = false;
 
 function timestamp() {
   return new Date().toLocaleTimeString();
@@ -25,8 +22,8 @@ function log(message) {
 }
 
 function updateLedDisplay() {
-  if (packageExists && !inCooldown) {
-    console.log("\n>>> LED FLASHING STARTED <<<\n");
+  if (ledFlashing) {
+    console.log("\n>>> LED FLASHING <<<\n");
   } else {
     console.log("\n>>> LED OFF <<<\n");
   }
@@ -53,11 +50,12 @@ client.on("connect", () => {
   console.log("  [q] - Quit");
   console.log("===========================================\n");
 
-  client.subscribe([TOPIC_PACKAGE_EXISTS, TOPIC_USER_HANDLED], (err) => {
+  // Subscribe only to led_flashing - server handles all state logic
+  client.subscribe(TOPIC_LED_FLASHING, (err) => {
     if (err) {
       console.error("Failed to subscribe:", err);
     } else {
-      log(`Subscribed to: ${TOPIC_PACKAGE_EXISTS}, ${TOPIC_USER_HANDLED}`);
+      log(`Subscribed to: ${TOPIC_LED_FLASHING}`);
     }
   });
 });
@@ -69,27 +67,12 @@ client.on("message", (topic, payload) => {
   try {
     const data = JSON.parse(message);
 
-    if (topic === TOPIC_PACKAGE_EXISTS) {
-      const newPackageExists = data.exists === true;
+    if (topic === TOPIC_LED_FLASHING) {
+      const newLedFlashing = data.flashing === true;
 
-      if (newPackageExists !== packageExists) {
-        packageExists = newPackageExists;
-
-        if (!packageExists) {
-          // Package removed - clear cooldown
-          if (cooldownTimer) {
-            clearTimeout(cooldownTimer);
-            cooldownTimer = null;
-          }
-          inCooldown = false;
-        }
-
+      if (newLedFlashing !== ledFlashing) {
+        ledFlashing = newLedFlashing;
         updateLedDisplay();
-      }
-    } else if (topic === TOPIC_USER_HANDLED) {
-      if (data.handled === true) {
-        log("User handled - entering cooldown");
-        enterCooldown();
       }
     }
   } catch {
@@ -106,46 +89,21 @@ client.on("close", () => {
 });
 
 // ============================================
-// Cooldown Logic
-// ============================================
-
-function enterCooldown() {
-  if (cooldownTimer) {
-    clearTimeout(cooldownTimer);
-  }
-
-  inCooldown = true;
-  console.log("\n>>> LED FLASHING STOPPED (user handled) <<<\n");
-
-  cooldownTimer = setTimeout(() => {
-    log("Cooldown complete");
-    inCooldown = false;
-    cooldownTimer = null;
-
-    if (packageExists) {
-      updateLedDisplay();
-    }
-  }, COOLDOWN_DURATION_MS);
-
-  log(`Cooldown active for ${COOLDOWN_DURATION_MS / 1000} seconds`);
-}
-
-// ============================================
 // Button Press Simulation
 // ============================================
 
 function simulateButtonPress() {
-  if (!packageExists) {
-    log("Button press ignored - no package detected");
-    return;
-  }
-
-  if (inCooldown) {
-    log("Button press ignored - in cooldown");
+  if (!ledFlashing) {
+    log("Button press ignored - LED not flashing");
     return;
   }
 
   log("Publishing user_handled...");
+
+  // Immediately stop flashing for low latency UX
+  // Server will confirm via led_flashing: false
+  ledFlashing = false;
+  console.log("\n>>> LED OFF <<<\n");
 
   const message = JSON.stringify({
     handled: true,
@@ -197,10 +155,6 @@ process.stdin.on("keypress", (str, key) => {
 
 function shutdown() {
   console.log("\nShutting down...");
-
-  if (cooldownTimer) {
-    clearTimeout(cooldownTimer);
-  }
 
   client.end(false, () => {
     console.log("Disconnected");

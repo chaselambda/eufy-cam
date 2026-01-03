@@ -16,6 +16,7 @@ import { addTextOverlay } from "./lib/image-processor.js";
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
 const VIDEOS_DIR = `${OUTPUT_ROOT}/videos`;
+const COOLDOWN_STATE_FILE = "./data/cooldown-state.json";
 const CAPTURE_DURATION_MS = 3000;
 const FRAME_CAPTURE_INTERVAL_S = 1;
 const DEVICE_DISCOVERY_TIMEOUT_MS = 5000;
@@ -301,8 +302,38 @@ async function captureVideo() {
   return captureState;
 }
 
+function checkCooldownState() {
+  try {
+    if (!fs.existsSync(COOLDOWN_STATE_FILE)) {
+      logger.warn("Cooldown state file not found, continuing with capture");
+      return false;
+    }
+
+    const content = fs.readFileSync(COOLDOWN_STATE_FILE, "utf-8");
+    const state = JSON.parse(content);
+
+    if (state.inCooldown === true) {
+      logger.info("In cooldown period, skipping capture", {
+        startedAt: state.startedAt,
+      });
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    logger.warn(`Error reading cooldown state: ${error.message}, continuing with capture`);
+    return false;
+  }
+}
+
 async function runOnce() {
   let packageDetected = false;
+
+  // Check cooldown state before capture
+  if (checkCooldownState()) {
+    logger.event("capture_skipped", "Capture skipped due to cooldown");
+    return;
+  }
 
   try {
     // Connect to MQTT broker
