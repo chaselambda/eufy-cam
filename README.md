@@ -57,6 +57,23 @@ nvm install 20
 nvm use 20
 ```
 
+Configure journald for persistent logs (default is memory-only):
+
+```bash
+sudo vim /etc/systemd/journald.conf
+```
+
+Add:
+```
+Storage=persistent
+RateLimitInterval=0
+```
+
+Then restart journald:
+```bash
+sudo systemctl restart systemd-journald
+```
+
 ### 2. Configuration
 
 Clone the repo and configure both the server and ESP8266 firmware:
