@@ -2,10 +2,15 @@
 
 /**
  * Continuous video capture from Eufy camera.
- * Saves a screenshot every 1 second until stopped (Ctrl+C).
+ * Saves a screenshot every N seconds until stopped (Ctrl+C).
  *
  * Usage:
  *   node capture-continuous.js
+ *
+ * KNOWN BUG: The Eufy livestream times out after ~25 seconds. This appears to
+ * be a limitation of the eufy-security-client library or the Eufy P2P protocol.
+ * The issue has not been resolved. For reliable capture, use capture.js with
+ * --loop instead.
  */
 
 import "dotenv/config";

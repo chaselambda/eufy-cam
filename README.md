@@ -29,6 +29,7 @@ Package detection system that captures images from a Eufy doorbell camera, uses 
 | Component | Description |
 |-----------|-------------|
 | `capture.js` | Main script - captures frames, detects packages, publishes to MQTT |
+| `capture-continuous.js` | Continuous capture (⚠️ buggy - times out after ~25s) |
 | `webserver/server.js` | MQTT broker (port 2000) + HTTP healthcheck (port 3000) |
 | `scripts/simulate-led-button.js` | Simulated MCU for testing without hardware |
 | `button_firmware/` | ESP8266 PlatformIO project for LED notification buttons |
@@ -194,3 +195,7 @@ eufy-cam/
 - Set `LOG_TIMESTAMPS=1` to include timestamps in log output
 - Check healthcheck: `curl localhost:3000/healthcheck`
 - View service logs: `journalctl -u eufy-capture -f`
+
+## Known Issues
+
+- **capture-continuous.js times out after ~25s**: The Eufy livestream disconnects after approximately 25 seconds. This appears to be a limitation of the eufy-security-client library or the Eufy P2P protocol. Use `capture.js --loop` for reliable periodic capture instead.
