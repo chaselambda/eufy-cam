@@ -30,8 +30,11 @@ const COOLDOWN_DURATION_MS = 10 * 1000; // 2 minutes
 // ============================================
 
 let packageExists = false;
-let inCooldown = false;
 let cooldownTimer = null;
+
+function inCooldown() {
+  return cooldownTimer !== null;
+}
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -75,7 +78,7 @@ function publishLedFlashing(flashing) {
 
 function updateLedState() {
   // LED should flash when package exists AND not in cooldown
-  const shouldFlash = packageExists && !inCooldown;
+  const shouldFlash = packageExists && !inCooldown();
   publishLedFlashing(shouldFlash);
 }
 
@@ -85,20 +88,17 @@ function startCooldown() {
     clearTimeout(cooldownTimer);
   }
 
-  inCooldown = true;
   writeCooldownState(true);
-  updateLedState(); // LED off during cooldown
-
   // Set timer to clear cooldown after duration
   cooldownTimer = setTimeout(() => {
-    inCooldown = false;
-    writeCooldownState(false);
     cooldownTimer = null;
+    writeCooldownState(false);
     logger.info("Cooldown period ended - waiting for next capture.js check");
     // Don't publish led_flashing here - let capture.js send package_exists
     // to trigger LED if package is still present
   }, COOLDOWN_DURATION_MS);
 
+  updateLedState(); // LED off during cooldown
   logger.info("Cooldown started", { durationSeconds: COOLDOWN_DURATION_MS / 1000 });
 }
 
@@ -106,10 +106,9 @@ function clearCooldown() {
   if (cooldownTimer) {
     clearTimeout(cooldownTimer);
     cooldownTimer = null;
+    writeCooldownState(false);
+    logger.info("Cooldown cleared early (package removed)");
   }
-  inCooldown = false;
-  writeCooldownState(false);
-  logger.info("Cooldown cleared early (package removed)");
   // Note: updateLedState() called separately when package_exists changes
 }
 
