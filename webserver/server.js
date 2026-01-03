@@ -34,7 +34,7 @@ let cooldownTimer = null;
 // Track ESP8266 client connections
 const espClients = new Set();
 const MIN_ESP_CLIENTS = 4;
-const ESP_GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
+const ESP_GRACE_PERIOD_MS = 20 * 1000; // 5 minutes
 let espBelowMinSince = null; // timestamp when count first dropped below MIN_ESP_CLIENTS
 
 function inCooldown() {
