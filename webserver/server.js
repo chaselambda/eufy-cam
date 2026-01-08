@@ -34,7 +34,7 @@ const serverStartedAt = Date.now();
 
 // Track ESP8266 client connections
 const espClients = new Set();
-const MIN_ESP_CLIENTS = 4;
+const MIN_ESP_CLIENTS = 3;
 const ESP_GRACE_PERIOD_MS = 20 * 1000; // 5 minutes
 let espBelowMinSince = null; // timestamp when count first dropped below MIN_ESP_CLIENTS
 
