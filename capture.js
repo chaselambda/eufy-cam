@@ -12,6 +12,7 @@ import {
   disconnect,
 } from "./lib/mqtt-client.js";
 import { addTextOverlay } from "./lib/image-processor.js";
+import { cleanupOldFiles } from "./lib/utils.js";
 
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
@@ -334,6 +335,9 @@ async function runOnce() {
     logger.event("capture_skipped", "Capture skipped due to cooldown");
     return;
   }
+
+  // Clean up old files
+  cleanupOldFiles();
 
   try {
     // Connect to MQTT broker
