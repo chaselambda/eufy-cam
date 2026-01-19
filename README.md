@@ -92,6 +92,7 @@ Edit `.env` with your credentials:
 - `MQTT_USER` / `MQTT_PASSWORD` - MQTT broker credentials
 - `SLACK_BOT_TOKEN` - Slack bot token for notifications (optional)
 - `SLACK_CHANNEL_ID` - Slack channel ID for notifications (optional)
+- `DEPLOY_HOST` - Production server IP for deployment
 
 ```bash
 # ESP8266 firmware configuration
@@ -159,6 +160,16 @@ View logs:
 journalctl -u eufy-mqtt -f
 journalctl -u eufy-capture -f
 ```
+
+## Deployment
+
+Deploy changes to the production server:
+
+```bash
+npm run deploy
+```
+
+This pulls the latest code and restarts the services on the server defined by `DEPLOY_HOST` in `.env`.
 
 ## Running (Development)
 
@@ -261,6 +272,7 @@ eufy-cam/
 │   ├── package-detector.js # Claude API
 │   └── mqtt-client.js      # MQTT constants and client utilities
 ├── scripts/
+│   ├── deploy.sh              # Deploy to production server
 │   ├── simulate-led-button.js # Simulated MCU for testing
 │   ├── simulate-package.js    # Simulate package detection
 │   ├── test-model.js          # Test package detection with an image

@@ -19,6 +19,7 @@
     "eval": "node package-detection-eval/run-eval.js",
     "test-model": "node scripts/test-model.js",
     "test-slack": "node scripts/test-slack.js",
+    "deploy": "bash scripts/deploy.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
