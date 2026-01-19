@@ -36,7 +36,7 @@ Package detection system that captures images from a Eufy doorbell camera, uses 
 | `lib/logger.js` | Winston structured logging |
 | `lib/package-detector.js` | Claude/Gemini API integration for package detection |
 | `lib/mqtt-client.js` | MQTT constants and client utilities |
-| `lib/slack-notifier.js` | Slack notifications when packages are detected |
+| `lib/slack-notifier.js` | Slack notifications for package events |
 
 ## Setup
 
@@ -121,7 +121,12 @@ See `button_firmware/README.md` for wiring and detailed instructions.
 
 ### 5. Slack Notifications (Optional)
 
-To receive Slack notifications when packages are detected:
+Receive Slack notifications for package events:
+- **Package detected**: Image + description when a package first appears
+- **Package picked up**: Text notification when package is no longer detected
+- **Package acknowledged**: Text notification when button is pressed
+
+To enable:
 
 1. Create a Slack app at https://api.slack.com/apps using `slack-app-manifest.yaml`
 2. Install the app to your workspace
@@ -290,6 +295,9 @@ eufy-cam/
 │   │   └── config.h          # Your settings (gitignored)
 │   ├── Makefile
 │   └── README.md
+├── data/
+│   ├── cooldown-state.json  # Cooldown state (generated)
+│   └── image-state.json     # Latest detected package image (generated)
 ├── package-detection-eval/
 │   ├── run-eval.js         # Evaluation script
 │   ├── no-package/         # Sample images without packages
