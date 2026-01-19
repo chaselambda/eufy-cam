@@ -267,6 +267,7 @@ eufy-cam/
 ├── package.json            # Dependencies
 ├── .env                    # Credentials (gitignored)
 ├── .env.default            # Template
+├── slack-app-manifest.yaml # Slack app manifest for setup
 ├── lib/
 │   ├── logger.js           # Winston logging
 │   ├── package-detector.js # Claude API
