@@ -13,6 +13,7 @@ import {
 } from "./lib/mqtt-client.js";
 import { addTextOverlay } from "./lib/image-processor.js";
 import { cleanupOldFiles } from "./lib/utils.js";
+import { notifyPackageDetected } from "./lib/slack-notifier.js";
 
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
@@ -365,11 +366,18 @@ async function runOnce() {
         });
 
         // Add text overlay to original image
+        let annotatedPath = null;
         try {
-          const annotatedPath = await addTextOverlay(latestFrame, result);
+          annotatedPath = await addTextOverlay(latestFrame, result);
           logger.info(`Created annotated image: ${annotatedPath}`);
         } catch (overlayError) {
           logger.warn(`Could not add text overlay: ${overlayError.message}`);
+        }
+
+        // Send Slack notification if package detected
+        if (packageDetected) {
+          const imageToSend = annotatedPath || latestFrame;
+          await notifyPackageDetected(imageToSend, result);
         }
       } else {
         logger.warn("No frames captured, cannot detect packages");

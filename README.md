@@ -34,8 +34,9 @@ Package detection system that captures images from a Eufy doorbell camera, uses 
 | `scripts/simulate-led-button.js` | Simulated MCU for testing without hardware |
 | `button_firmware/` | ESP8266 PlatformIO project for LED notification buttons |
 | `lib/logger.js` | Winston structured logging |
-| `lib/package-detector.js` | Claude API integration for package detection |
+| `lib/package-detector.js` | Claude/Gemini API integration for package detection |
 | `lib/mqtt-client.js` | MQTT constants and client utilities |
+| `lib/slack-notifier.js` | Slack notifications when packages are detected |
 
 ## Setup
 
@@ -85,8 +86,12 @@ cp .env.default .env
 
 Edit `.env` with your credentials:
 - `EUFY_USERNAME` / `EUFY_PASSWORD` - Eufy account credentials
-- `ANTHROPIC_API_KEY` - Claude API key
+- `ANTHROPIC_API_KEY` - Claude API key (required if using Claude)
+- `GOOGLE_AI_API_KEY` - Google AI API key (required if using Gemini)
+- `MODEL` - Model to use: `claude` (default) or `gemini`
 - `MQTT_USER` / `MQTT_PASSWORD` - MQTT broker credentials
+- `SLACK_BOT_TOKEN` - Slack bot token for notifications (optional)
+- `SLACK_CHANNEL_ID` - Slack channel ID for notifications (optional)
 
 ```bash
 # ESP8266 firmware configuration
@@ -113,7 +118,22 @@ make upload
 
 See `button_firmware/README.md` for wiring and detailed instructions.
 
-### 5. Systemd Services (Production)
+### 5. Slack Notifications (Optional)
+
+To receive Slack notifications when packages are detected:
+
+1. Create a Slack app at https://api.slack.com/apps using `slack-app-manifest.yaml`
+2. Install the app to your workspace
+3. Copy the Bot User OAuth Token (`xoxb-...`) from OAuth & Permissions
+4. Get the channel ID (right-click channel → View channel details → scroll to bottom)
+5. Add to `.env`:
+   ```
+   SLACK_BOT_TOKEN=xoxb-your-token
+   SLACK_CHANNEL_ID=C0123456789
+   ```
+6. Invite the bot to your channel: `/invite @Chase Bot`
+
+### 6. Systemd Services (Production)
 
 Install both services for production deployment:
 
@@ -170,6 +190,31 @@ npm run simulate-led-button
 # Press 'q' to quit
 ```
 
+### Test Model Detection
+
+Test package detection with a sample image:
+
+```bash
+# Test with Claude (default)
+npm run test-model -- package-detection-eval/package-exists/frame_T8203P1224450F4B_1767393931512_000001.jpg
+
+# Test with Gemini
+MODEL=gemini npm run test-model -- package-detection-eval/package-exists/frame_T8203P1224450F4B_1767393931512_000001.jpg
+
+# Test with a no-package image
+npm run test-model -- package-detection-eval/no-package/frame_T8203P1224450F4B_1767394055496_000001.jpg
+```
+
+### Test Slack Notifications
+
+Verify Slack integration is working:
+
+```bash
+npm run test-slack -- package-detection-eval/package-exists/frame_T8203P1224450F4B_1767393931512_000001.jpg
+```
+
+**Note:** You must first invite the bot to your Slack channel: `/invite @Chase Bot`
+
 ## MQTT Topics
 
 | Topic | Direction | Payload |
@@ -217,7 +262,9 @@ eufy-cam/
 │   └── mqtt-client.js      # MQTT constants and client utilities
 ├── scripts/
 │   ├── simulate-led-button.js # Simulated MCU for testing
-│   └── simulate-package.js    # Simulate package detection
+│   ├── simulate-package.js    # Simulate package detection
+│   ├── test-model.js          # Test package detection with an image
+│   └── test-slack.js          # Test Slack notification
 ├── webserver/
 │   ├── server.js           # MQTT broker + healthcheck
 │   ├── eufy-mqtt.service   # Systemd service (broker)
@@ -230,6 +277,10 @@ eufy-cam/
 │   │   └── config.h          # Your settings (gitignored)
 │   ├── Makefile
 │   └── README.md
+├── package-detection-eval/
+│   ├── run-eval.js         # Evaluation script
+│   ├── no-package/         # Sample images without packages
+│   └── package-exists/     # Sample images with packages
 └── captured/
     ├── snapshots/          # JPEG frames
     ├── snapshots_annotated/ # Frames with detection overlay
