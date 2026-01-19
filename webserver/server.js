@@ -10,6 +10,11 @@ import {
   TOPIC_USER_HANDLED,
   TOPIC_LED_FLASHING,
 } from "../lib/mqtt-client.js";
+import {
+  notifyPackageDetected,
+  notifyPackagePickedUp,
+  notifyPackageAcknowledged,
+} from "../lib/slack-notifier.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +25,7 @@ const MQTT_PASSWORD = process.env.MQTT_PASSWORD || "pass";
 const HTTP_PORT = 3000;
 const DATA_DIR = path.join(__dirname, "..", "data");
 const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
+const IMAGE_STATE_FILE = path.join(DATA_DIR, "image-state.json");
 const HEALTHCHECK_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -45,6 +51,23 @@ function inCooldown() {
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Read the image state file written by capture.js
+ * @returns {object|null} Image state or null if not found/invalid
+ */
+function readImageState() {
+  try {
+    if (!fs.existsSync(IMAGE_STATE_FILE)) {
+      return null;
+    }
+    const content = fs.readFileSync(IMAGE_STATE_FILE, "utf-8");
+    return JSON.parse(content);
+  } catch (error) {
+    logger.warn("Failed to read image state", { error: error.message });
+    return null;
   }
 }
 
@@ -179,13 +202,28 @@ aedes.on("publish", (packet, client) => {
         lastPackageExistsAt = Date.now();
         const newPackageExists = payload.exists === true;
         const stateChanged = newPackageExists !== packageExists;
+        const previousPackageExists = packageExists;
         packageExists = newPackageExists;
 
         if (stateChanged) {
           logger.info("Package state changed", { packageExists });
-          if (!packageExists) {
-            logger.info("Package removed - clearing cooldown");
+          if (packageExists && !previousPackageExists) {
+            // Package just appeared - send Slack notification with image
+            const imageState = readImageState();
+            if (imageState && imageState.imagePath) {
+              logger.info("Sending Slack notification for package detected");
+              notifyPackageDetected(imageState.imagePath, {
+                package_detected: true,
+                description: imageState.description || "Package detected on doorstep",
+              });
+            } else {
+              logger.warn("No image state available for Slack notification");
+            }
+          } else if (!packageExists && previousPackageExists) {
+            // Package just disappeared - send pickup notification
+            logger.info("Package removed - clearing cooldown and notifying");
             clearCooldown();
+            notifyPackagePickedUp();
           }
         }
 
@@ -194,7 +232,8 @@ aedes.on("publish", (packet, client) => {
         updateLedState();
       } else if (packet.topic === TOPIC_USER_HANDLED && payload.handled === true) {
         if (packageExists) {
-          logger.info("User handled package - starting cooldown");
+          logger.info("User handled package - starting cooldown and notifying");
+          notifyPackageAcknowledged();
           startCooldown();
         } else {
           logger.info("User button press ignored - no package present");

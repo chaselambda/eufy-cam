@@ -13,12 +13,12 @@ import {
 } from "./lib/mqtt-client.js";
 import { addTextOverlay } from "./lib/image-processor.js";
 import { cleanupOldFiles } from "./lib/utils.js";
-import { notifyPackageDetected } from "./lib/slack-notifier.js";
 
 const OUTPUT_ROOT = "./captured";
 const SNAPSHOTS_DIR = `${OUTPUT_ROOT}/snapshots`;
 const VIDEOS_DIR = `${OUTPUT_ROOT}/videos`;
 const COOLDOWN_STATE_FILE = "./data/cooldown-state.json";
+const IMAGE_STATE_FILE = "./data/image-state.json";
 const CAPTURE_DURATION_MS = 3000;
 const FRAME_CAPTURE_INTERVAL_S = 1;
 const DEVICE_DISCOVERY_TIMEOUT_MS = 5000;
@@ -374,10 +374,16 @@ async function runOnce() {
           logger.warn(`Could not add text overlay: ${overlayError.message}`);
         }
 
-        // Send Slack notification if package detected
+        // Write image state for server.js to read when sending Slack notification
         if (packageDetected) {
           const imageToSend = annotatedPath || latestFrame;
-          await notifyPackageDetected(imageToSend, result);
+          const imageState = {
+            imagePath: path.resolve(imageToSend),
+            timestamp: new Date().toISOString(),
+            description: result.description,
+          };
+          fs.writeFileSync(IMAGE_STATE_FILE, JSON.stringify(imageState, null, 2));
+          logger.info("Wrote image state for Slack notification", { imagePath: imageState.imagePath });
         }
       } else {
         logger.warn("No frames captured, cannot detect packages");

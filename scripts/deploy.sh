@@ -15,5 +15,7 @@ SERVER="root@$DEPLOY_HOST"
 REMOTE_DIR="eufy-cam"
 
 echo "Deploying to $SERVER..."
+echo "Copying .env..."
+scp .env "$SERVER:~/$REMOTE_DIR/.env"
 ssh -A "$SERVER" "source ~/.nvm/nvm.sh && cd $REMOTE_DIR && git pull && npm install && sudo systemctl restart eufy-mqtt eufy-capture"
 echo "Deploy complete!"
