@@ -23,6 +23,7 @@ const CAPTURE_DURATION_MS = 3000;
 const FRAME_CAPTURE_INTERVAL_S = 1;
 const DEVICE_DISCOVERY_TIMEOUT_MS = 5000;
 const CAPTURE_TIMEOUT_MS = 30000;
+const RUN_ONCE_TIMEOUT_MS = 90000;
 const FFMPEG_QUALITY = "2";
 const SAVE_RAW_VIDEO = true;
 const TARGET_CAMERA_NAME = "775";
@@ -233,6 +234,7 @@ async function captureVideo() {
     complete: false,
     ffmpegProcess: null,
     framePattern: null,
+    authError: null,
   };
 
   eufy.on("device added", (device) => {
@@ -241,6 +243,33 @@ async function captureVideo() {
 
   eufy.on("station added", (station) => {
     logger.info(`Station found: ${station.getName()} (${station.getSerial()})`);
+  });
+
+  // Surface auth failures that eufy-security-client emits as events but
+  // does not throw from connect(). Without these handlers the loop hangs
+  // silently at getDevices().
+  eufy.on("captcha request", (captchaId, captcha) => {
+    logger.event("capture_auth_failure", "Eufy login requires CAPTCHA", { captchaId });
+    captureState.authError = new Error(
+      `Eufy login requires CAPTCHA (id=${captchaId}). ` +
+      `Delete data/persistent.json and re-auth manually.`
+    );
+  });
+
+  eufy.on("tfa request", () => {
+    logger.event("capture_auth_failure", "Eufy login requires 2FA");
+    captureState.authError = new Error(
+      "Eufy login requires 2FA verification. Re-auth manually."
+    );
+  });
+
+  eufy.on("connection error", (err) => {
+    logger.event("capture_auth_failure", "Eufy connection error", {
+      error: err?.message || String(err),
+    });
+    captureState.authError = new Error(
+      `Eufy connection error: ${err?.message || err}`
+    );
   });
 
   eufy.on(
@@ -258,49 +287,64 @@ async function captureVideo() {
     }
   );
 
-  await eufy.connect();
-  logger.info("Connected successfully!");
+  try {
+    await eufy.connect();
 
-  await new Promise((resolve) =>
-    setTimeout(resolve, DEVICE_DISCOVERY_TIMEOUT_MS)
-  );
+    await new Promise((resolve) =>
+      setTimeout(resolve, DEVICE_DISCOVERY_TIMEOUT_MS)
+    );
 
-  logger.info("Getting devices...");
-  const devices = await eufy.getDevices();
-  const cameras = devices.filter((device) => device instanceof Camera);
+    // connect() resolves immediately even on auth failure; check the
+    // event-driven authError and the actual connection state before
+    // proceeding, otherwise getDevices() hangs forever.
+    if (captureState.authError) {
+      throw captureState.authError;
+    }
+    if (!eufy.isConnected()) {
+      throw new Error(
+        "Eufy connect() returned but isConnected()=false after " +
+        `${DEVICE_DISCOVERY_TIMEOUT_MS}ms; login likely failed silently`
+      );
+    }
+    logger.info("Connected successfully!");
 
-  if (cameras.length === 0) {
-    logger.warn("No cameras found!");
-    return { packageDetected: false };
+    logger.info("Getting devices...");
+    const devices = await eufy.getDevices();
+    const cameras = devices.filter((device) => device instanceof Camera);
+
+    if (cameras.length === 0) {
+      logger.warn("No cameras found!");
+      return captureState;
+    }
+
+    logger.info(`Found ${cameras.length} camera(s):`);
+    cameras.forEach((camera, index) => {
+      logger.info(`${index + 1}. ${camera.getName()} (${camera.getSerial()})`);
+    });
+
+    const targetDevice = findTargetCamera(cameras);
+    logger.info(`Using camera: ${targetDevice.getName()}`);
+
+    logger.info("Starting livestream to capture video...");
+    await eufy.startStationLivestream(targetDevice.getSerial());
+
+    let timeout = CAPTURE_TIMEOUT_MS;
+    const CHECK_INTERVAL_MS = 100;
+    while (!captureState.complete && timeout > 0) {
+      await new Promise((resolve) => setTimeout(resolve, CHECK_INTERVAL_MS));
+      timeout -= CHECK_INTERVAL_MS;
+    }
+
+    if (!captureState.complete) {
+      logger.error("Capture timeout - stopping livestream");
+      await eufy.stopStationLivestream(targetDevice.getSerial());
+    }
+
+    return captureState;
+  } finally {
+    logger.info("Cleaning up Eufy connection...");
+    eufy.close();
   }
-
-  logger.info(`Found ${cameras.length} camera(s):`);
-  cameras.forEach((camera, index) => {
-    logger.info(`${index + 1}. ${camera.getName()} (${camera.getSerial()})`);
-  });
-
-  const targetDevice = findTargetCamera(cameras);
-  logger.info(`Using camera: ${targetDevice.getName()}`);
-
-  logger.info("Starting livestream to capture video...");
-  await eufy.startStationLivestream(targetDevice.getSerial());
-
-  let timeout = CAPTURE_TIMEOUT_MS;
-  const CHECK_INTERVAL_MS = 100;
-  while (!captureState.complete && timeout > 0) {
-    await new Promise((resolve) => setTimeout(resolve, CHECK_INTERVAL_MS));
-    timeout -= CHECK_INTERVAL_MS;
-  }
-
-  if (!captureState.complete) {
-    logger.error("Capture timeout - stopping livestream");
-    await eufy.stopStationLivestream(targetDevice.getSerial());
-  }
-
-  logger.info("Cleaning up Eufy connection...");
-  eufy.close();
-
-  return captureState;
 }
 
 function checkCooldownState() {
@@ -344,8 +388,20 @@ async function runOnce() {
     // Connect to MQTT broker
     mqttClient = await createClient("capture");
 
-    // Capture video and frames
-    const captureState = await captureVideo();
+    // Capture video and frames. Hard-bound with a timeout so a hang
+    // anywhere inside the eufy client (getDevices, livestream, etc.)
+    // produces a capture_error instead of deadlocking the loop.
+    let timeoutHandle;
+    const captureState = await Promise.race([
+      captureVideo(),
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error(`captureVideo() exceeded ${RUN_ONCE_TIMEOUT_MS}ms`)),
+          RUN_ONCE_TIMEOUT_MS
+        );
+      }),
+    ]);
+    clearTimeout(timeoutHandle);
 
     // Find the latest captured frame
     if (captureState.framePattern) {
