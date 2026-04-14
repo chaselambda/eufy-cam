@@ -406,9 +406,16 @@ async function runOnce() {
     ]);
     clearTimeout(timeoutHandle);
 
+    if (!captureState.framePattern) {
+      throw new Error("Livestream never started (P2P command likely aged out); no frames captured");
+    }
+
     // Find the latest captured frame
     if (captureState.framePattern) {
       const latestFrame = findLatestFrame(captureState.framePattern);
+      if (!latestFrame) {
+        throw new Error("ffmpeg produced no frames from livestream");
+      }
 
       if (latestFrame) {
         logger.info(`Analyzing latest frame: ${latestFrame}`);
@@ -444,8 +451,6 @@ async function runOnce() {
           fs.writeFileSync(IMAGE_STATE_FILE, JSON.stringify(imageState, null, 2));
           logger.info("Wrote image state for Slack notification", { imagePath: imageState.imagePath });
         }
-      } else {
-        logger.warn("No frames captured, cannot detect packages");
       }
     }
 
