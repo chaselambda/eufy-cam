@@ -6,6 +6,7 @@ import path from "path";
 
 import { logger } from "./lib/logger.js";
 import { detectPackage } from "./lib/package-detector.js";
+import { checkChange, saveReference } from "./lib/pre-filter.js";
 import {
   createClient,
   publishPackageStatus,
@@ -420,8 +421,22 @@ async function runOnce() {
       if (latestFrame) {
         logger.info(`Analyzing latest frame: ${latestFrame}`);
 
-        // Detect packages (cropping handled internally)
-        const result = await detectPackage(latestFrame);
+        // Skip the model call when the scene is unchanged since the last
+        // classified frame; reuse that frame's verdict instead.
+        const preCheck = await checkChange(latestFrame);
+        const callModel = !preCheck.cachedResult;
+
+        let result;
+        if (callModel) {
+          result = await detectPackage(latestFrame);
+          // A full-frame fallback verdict describes a different region than
+          // the doorstep crop the pre-filter compares — never cache it
+          if (!result.used_full_frame) {
+            await saveReference(latestFrame, result, preCheck.crop);
+          }
+        } else {
+          result = preCheck.cachedResult;
+        }
         packageDetected = result.package_detected;
 
         logger.event("package_detection", "Package detection complete", {
@@ -429,9 +444,13 @@ async function runOnce() {
           confidence: result.confidence,
           description: result.description,
           frame: latestFrame,
+          modelCalled: callModel,
+          preFilterScore: preCheck.score,
+          preFilterReason: preCheck.reason,
         });
 
-        // Add text overlay to original image
+        // Add text overlay to original image (on cached cycles the scene is
+        // unchanged, so the cached description still fits this frame)
         let annotatedPath = null;
         try {
           annotatedPath = await addTextOverlay(latestFrame, result);
@@ -440,7 +459,10 @@ async function runOnce() {
           logger.warn(`Could not add text overlay: ${overlayError.message}`);
         }
 
-        // Write image state for server.js to read when sending Slack notification
+        // Write image state for server.js to read when sending Slack
+        // notification. Written on every detected cycle — including
+        // cached-verdict ones — so a notification fired later (e.g. after a
+        // broker restart) always attaches the frame just captured.
         if (packageDetected) {
           const imageToSend = annotatedPath || latestFrame;
           const imageState = {
