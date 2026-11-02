@@ -27,12 +27,14 @@ const MAX_REQUESTS_PER_SECOND = 10;
 const TOKEN_SAMPLE_SIZE = 8;
 const TARGET_WIDTH = Number(process.env.DETECT_TARGET_WIDTH) || 480;
 // gemini-3.1-flash-lite input rate, and the production model-call volume
-// measured on the server. Captures run every 180s, but the pixel-diff
-// pre-filter answers ~98% of them from the previous verdict without touching
-// the API (measured: 2 model calls across 107 cycles in two clean windows), so
+// measured on the server. Keep LOOP_SECONDS in step with --loop in
+// webserver/eufy-capture.service. The pixel-diff pre-filter answers ~98% of
+// captures from the previous verdict without touching the API (measured: 2
+// model calls across 107 cycles, in a morning and an evening window), so
 // costing this at one call per capture overstates the bill by ~50x.
 const INPUT_COST_PER_MTOK = 0.25;
-const CAPTURES_PER_MONTH = (30.4 * 24 * 60 * 60) / 180;
+const LOOP_SECONDS = 60;
+const CAPTURES_PER_MONTH = (30.4 * 24 * 60 * 60) / LOOP_SECONDS;
 const PRE_FILTER_PASS_RATE = 0.02;
 const CALLS_PER_MONTH = CAPTURES_PER_MONTH * PRE_FILTER_PASS_RATE;
 const NO_PACKAGE_DIR = path.join(__dirname, "no-package");
