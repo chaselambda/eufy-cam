@@ -26,10 +26,15 @@ const RUNS_PER_IMAGE = 3;
 const MAX_REQUESTS_PER_SECOND = 10;
 const TOKEN_SAMPLE_SIZE = 8;
 const TARGET_WIDTH = Number(process.env.DETECT_TARGET_WIDTH) || 480;
-// gemini-3.1-flash-lite input rate, and the production call volume measured on
-// the server (one capture per --loop interval, 24/7).
+// gemini-3.1-flash-lite input rate, and the production model-call volume
+// measured on the server. Captures run every 180s, but the pixel-diff
+// pre-filter answers ~98% of them from the previous verdict without touching
+// the API (measured: 2 model calls across 107 cycles in two clean windows), so
+// costing this at one call per capture overstates the bill by ~50x.
 const INPUT_COST_PER_MTOK = 0.25;
-const CALLS_PER_MONTH = (30.4 * 24 * 60 * 60) / 180;
+const CAPTURES_PER_MONTH = (30.4 * 24 * 60 * 60) / 180;
+const PRE_FILTER_PASS_RATE = 0.02;
+const CALLS_PER_MONTH = CAPTURES_PER_MONTH * PRE_FILTER_PASS_RATE;
 const NO_PACKAGE_DIR = path.join(__dirname, "no-package");
 const PACKAGE_EXISTS_DIR = path.join(__dirname, "package-exists");
 
@@ -228,7 +233,8 @@ async function main() {
     console.log(`\nCrop width:        ${TARGET_WIDTH}px`);
     console.log(`Image sent:        ${tokenStats.dims}`);
     console.log(`Prompt tokens:     ${tokenStats.mean.toFixed(0)} (min ${tokenStats.min}, max ${tokenStats.max}, n=${tokenStats.n})`);
-    console.log(`Monthly input:     $${monthlyInputCost(tokenStats.mean).toFixed(2)} at ${CALLS_PER_MONTH.toLocaleString()} calls/mo`);
+    console.log(`Monthly input:     $${monthlyInputCost(tokenStats.mean).toFixed(2)} at ~${Math.round(CALLS_PER_MONTH).toLocaleString()} model calls/mo`);
+    console.log(`                   (${Math.round(CAPTURES_PER_MONTH).toLocaleString()} captures/mo, ${(PRE_FILTER_PASS_RATE * 100).toFixed(0)}% reach the model)`);
   }
 
   if (failures.length > 0) {
