@@ -17,5 +17,18 @@ REMOTE_DIR="eufy-cam"
 echo "Deploying to $SERVER..."
 echo "Copying .env..."
 scp .env "$SERVER:~/$REMOTE_DIR/.env"
-ssh -A "$SERVER" "source ~/.nvm/nvm.sh && cd $REMOTE_DIR && git pull && npm install && sudo systemctl restart eufy-mqtt eufy-capture"
+
+# Reinstall the unit files on every deploy. They live in the repo but systemd
+# reads them from /etc/systemd/system, so a unit edited here used to sit unused
+# until someone remembered to copy it by hand - which is how the capture loop
+# kept running at --loop 60s long after the repo said 180s.
+ssh -A "$SERVER" "source ~/.nvm/nvm.sh && cd $REMOTE_DIR && git pull && npm install \
+  && cp webserver/eufy-mqtt.service webserver/eufy-capture.service /etc/systemd/system/ \
+  && systemctl daemon-reload \
+  && systemctl restart eufy-mqtt eufy-capture"
+
+echo "Verifying installed units match the repo..."
+ssh -A "$SERVER" "cd $REMOTE_DIR && diff webserver/eufy-mqtt.service /etc/systemd/system/eufy-mqtt.service \
+  && diff webserver/eufy-capture.service /etc/systemd/system/eufy-capture.service"
+
 echo "Deploy complete!"
