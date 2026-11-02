@@ -17,13 +17,19 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { detectPackage } from "../lib/package-detector.js";
+import { detectPackage, countDetectionTokens } from "../lib/package-detector.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const RUNS_PER_IMAGE = 3;
 const MAX_REQUESTS_PER_SECOND = 10;
+const TOKEN_SAMPLE_SIZE = 8;
+const TARGET_WIDTH = Number(process.env.DETECT_TARGET_WIDTH) || 480;
+// gemini-3.1-flash-lite input rate, and the production call volume measured on
+// the server (one capture per --loop interval, 24/7).
+const INPUT_COST_PER_MTOK = 0.25;
+const CALLS_PER_MONTH = (30.4 * 24 * 60 * 60) / 180;
 const NO_PACKAGE_DIR = path.join(__dirname, "no-package");
 const PACKAGE_EXISTS_DIR = path.join(__dirname, "package-exists");
 
@@ -59,6 +65,41 @@ async function runWithRateLimit(tasks, maxPerSecond) {
 
   console.log(); // newline after progress
   return allResults;
+}
+
+function monthlyInputCost(promptTokens) {
+  return (promptTokens * CALLS_PER_MONTH * INPUT_COST_PER_MTOK) / 1_000_000;
+}
+
+/**
+ * Measure real prompt-token cost for a sample of images at the current width.
+ * @param {string[]} imagePaths
+ */
+async function measurePromptTokens(imagePaths) {
+  if (imagePaths.length === 0) return null;
+
+  const counts = [];
+  let dims = "unknown";
+
+  for (const imagePath of imagePaths) {
+    try {
+      const { promptTokens, width, height } = await countDetectionTokens(imagePath);
+      counts.push(promptTokens);
+      dims = `${width}x${height}`;
+    } catch (error) {
+      console.log(`\nToken measurement skipped for ${path.basename(imagePath)}: ${error.message}`);
+    }
+  }
+
+  if (counts.length === 0) return null;
+
+  return {
+    dims,
+    n: counts.length,
+    mean: counts.reduce((a, b) => a + b, 0) / counts.length,
+    min: Math.min(...counts),
+    max: Math.max(...counts),
+  };
 }
 
 async function evaluateSingle(imagePath, expected) {
@@ -128,6 +169,13 @@ async function main() {
     }
   }
 
+  // Measure what one detection call actually costs at the current crop width
+  // before spending money on the accuracy runs. countTokens is free, so this
+  // is the cheap half of deciding whether a narrower crop is worth it.
+  const tokenStats = await measurePromptTokens(
+    [...noPackageImages, ...packageExistsImages].slice(0, TOKEN_SAMPLE_SIZE)
+  );
+
   console.log("Running evaluations...");
   const results = await runWithRateLimit(tasks, MAX_REQUESTS_PER_SECOND);
 
@@ -172,6 +220,16 @@ async function main() {
 
   const accuracy = totalValid > 0 ? (truePositive + trueNegative) / totalValid * 100 : 0;
   console.log(`\nOverall Accuracy: ${accuracy.toFixed(1)}%`);
+
+  if (tokenStats) {
+    console.log("\n" + "=".repeat(60));
+    console.log("INPUT COST");
+    console.log("=".repeat(60));
+    console.log(`\nCrop width:        ${TARGET_WIDTH}px`);
+    console.log(`Image sent:        ${tokenStats.dims}`);
+    console.log(`Prompt tokens:     ${tokenStats.mean.toFixed(0)} (min ${tokenStats.min}, max ${tokenStats.max}, n=${tokenStats.n})`);
+    console.log(`Monthly input:     $${monthlyInputCost(tokenStats.mean).toFixed(2)} at ${CALLS_PER_MONTH.toLocaleString()} calls/mo`);
+  }
 
   if (failures.length > 0) {
     console.log(`\n${"=".repeat(60)}`);
