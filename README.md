@@ -1,13 +1,19 @@
 # Eufy Package Detector
 
-Package detection system that captures images from a Eufy doorbell camera, uses Claude AI to detect packages, and notifies ESP8266 microcontrollers via MQTT.
+Package detection system that captures images from a Eufy camera, uses a vision
+model to detect packages, and notifies ESP8266 microcontrollers via MQTT.
+
+The capture target is the camera whose name contains `TARGET_CAMERA_NAME`
+(`capture.js`), currently **775** — not the device named `Doorbell`. See
+[Known Issues](#known-issues) if your account has more than one station. The
+vision model is selected by `MODEL` in `.env` (`claude` or `gemini`).
 
 ## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Eufy Camera    │────▶│   capture.js    │────▶│  Claude API     │
-│  (Doorbell)     │     │  (Node.js)      │     │  (Vision)       │
+│  Eufy Camera    │────▶│   capture.js    │────▶│  Claude/Gemini  │
+│  (name: 775)    │     │  (Node.js)      │     │  (Vision)       │
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
                                 │
                                 ▼
@@ -321,3 +327,34 @@ eufy-cam/
 ## Known Issues
 
 - **capture-continuous.js times out after ~25s**: The Eufy livestream disconnects after approximately 25 seconds. This appears to be a limitation of the eufy-security-client library or the Eufy P2P protocol. Use `capture.js --loop` for reliable periodic capture instead.
+
+- **Unreachable second station floods the log**: `eufy-security-client` opens a
+  P2P session to *every* station in the Eufy account, not just the one this
+  project uses. This account has two:
+
+  | Station | Serial | Status |
+  |---|---|---|
+  | `775` | `T8203P1224450F4B` | in use — the capture target |
+  | `Doorbell` | `T8203P1123140CCD` | registered in the account, never connects |
+
+  The cloud API reports `Doorbell`, so it is discovered on every login, but its
+  P2P address lookup always fails:
+
+  ```
+  ERROR [EUFY] [p2p] All address lookup tentatives failed. {"stationSN":"T8203P1123140CCD"}
+  ```
+
+  That is roughly **1,700 error lines per day** and it buries real signal in
+  `journalctl`. It is otherwise harmless to detection — nothing here reads that
+  station — so it is safe to leave alone.
+
+  It used to be worse: the P2P teardown after a failed lookup delivers a late
+  video chunk, which crashed the capture loop ~65 times a day until the stream
+  writes were guarded (see `handleLivestreamStart` in `capture.js`). Every crash
+  landed within 0–2s of one of these failures. The write is safe now, but the
+  log noise remains.
+
+  **To resolve it, remove the device in the Eufy app or bring it back online.**
+  This cannot be done from this repo — `eufy-security-client` exposes no
+  device- or station-removal API, only `deleteUser` (an account user, not a
+  device). Do not reach for that.
