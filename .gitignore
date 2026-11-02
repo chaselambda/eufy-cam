@@ -7,3 +7,5 @@ logs/
 reference/
 data/
 button_firmware/src/config.h
+.vscode/
+button_firmware/.pio/

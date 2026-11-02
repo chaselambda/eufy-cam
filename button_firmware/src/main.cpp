@@ -1,8 +1,8 @@
+#include "config.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <ArduinoJson.h>
-#include "config.h"
 
 // Hardware pins
 constexpr int LED_PIN = D2;    // GPIO4
@@ -15,8 +15,8 @@ void setLed(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
 bool isButtonPressed() { return digitalRead(BUTTON_PIN) == LOW; }
 
 // MQTT Topics
-const char* TOPIC_LED_FLASHING = "led_flashing";
-const char* TOPIC_USER_HANDLED = "user_handled";
+const char *TOPIC_LED_FLASHING = "led_flashing";
+const char *TOPIC_USER_HANDLED = "user_handled";
 
 // Timing constants
 constexpr unsigned long LED_FLASH_INTERVAL_MS = 500;
@@ -31,8 +31,8 @@ unsigned long lastLedToggle = 0;
 bool ledState = false;
 
 // Button debounce
-bool lastReading = false;    // Raw reading from last loop
-bool buttonPressed = false;  // Debounced confirmed state
+bool lastReading = false;   // Raw reading from last loop
+bool buttonPressed = false; // Debounced confirmed state
 unsigned long lastDebounceTime = 0;
 
 void setup_wifi() {
@@ -82,7 +82,7 @@ void handleButtonPress() {
   ledState = false;
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char *topic, byte *payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("]: ");
@@ -173,10 +173,7 @@ void checkButton() {
     if (reading != buttonPressed) {
       buttonPressed = reading;
       if (buttonPressed) {
-        // Rising edge - button just pressed
-        if (ledFlashing) {
-          handleButtonPress();
-        }
+        handleButtonPress();
       }
     }
   }
