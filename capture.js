@@ -132,28 +132,52 @@ async function handleLivestreamStart(
     const ffmpegProcess = createFFmpegProcess(codecExt, device, timestamp);
     captureState.ffmpegProcess = ffmpegProcess;
 
-    videoStream.on("data", (chunk) => {
-      logger.debug("Received video chunk", { size: chunk.length });
-      if (!ffmpegProcess.stdin.destroyed) {
-        ffmpegProcess.stdin.write(chunk);
-      }
-    });
-
     let writeStream;
     if (SAVE_RAW_VIDEO) {
       const outputPath = `${VIDEOS_DIR}/capture_${device.getSerial()}_${timestamp}.${codecExt}`;
       writeStream = fs.createWriteStream(outputPath);
-      videoStream.on("data", (chunk) => {
-        writeStream.write(chunk);
+      // A write-after-end emits 'error' on the stream, and an 'error' with no
+      // listener is a process-level throw. This capture is best-effort, so a
+      // failed raw-video write must never be fatal.
+      writeStream.on("error", (err) => {
+        logger.warn("Raw video write failed", { error: err.message });
       });
     }
+
+    ffmpegProcess.stdin.on("error", (err) => {
+      logger.warn("FFmpeg stdin write failed", { error: err.message });
+    });
+
+    // The P2P session keeps pushing chunks for a moment after we end the
+    // output streams, so writes have to stop at the same instant the streams
+    // close. `destroyed` alone does not cover that window - a stream that has
+    // been ended but not yet destroyed still rejects writes.
+    let capturing = true;
+    const writable = (stream) =>
+      stream && !stream.writableEnded && !stream.destroyed;
+
+    const onVideoData = (chunk) => {
+      if (!capturing) return;
+      logger.debug("Received video chunk", { size: chunk.length });
+      if (writable(ffmpegProcess.stdin)) {
+        ffmpegProcess.stdin.write(chunk);
+      }
+      if (writable(writeStream)) {
+        writeStream.write(chunk);
+      }
+    };
+
+    videoStream.on("data", onVideoData);
 
     setTimeout(async () => {
       logger.info(
         `Stopping capture after ${CAPTURE_DURATION_MS / 1000} seconds...`
       );
 
-      if (!ffmpegProcess.stdin.destroyed) {
+      capturing = false;
+      videoStream.removeListener("data", onVideoData);
+
+      if (writable(ffmpegProcess.stdin)) {
         ffmpegProcess.stdin.end();
       }
 
