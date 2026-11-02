@@ -28,6 +28,12 @@ const COOLDOWN_STATE_FILE = path.join(DATA_DIR, "cooldown-state.json");
 const IMAGE_STATE_FILE = path.join(DATA_DIR, "image-state.json");
 const HEALTHCHECK_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+// led_flashing is retained, so the last value sticks until something replaces
+// it. If capture.js stops publishing package_exists (crash, P2P stall, vision
+// API outage or billing failure) a retained `true` would flash the LED forever
+// on a verdict nobody can confirm. Past this age we stop trusting the verdict.
+const LED_STALE_AFTER_MS = HEALTHCHECK_WINDOW_MS;
+const LED_WATCHDOG_INTERVAL_MS = 30 * 1000;
 
 // ============================================
 // LED State Management
@@ -36,6 +42,7 @@ const COOLDOWN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 let packageExists = false;
 let cooldownTimer = null;
 let lastPackageExistsAt = null; // timestamp of last package_exists message
+let lastPublishedFlashing = null; // last value written to the retained topic
 const serverStartedAt = Date.now();
 
 // Track ESP8266 client connections
@@ -102,13 +109,30 @@ function publishLedFlashing(flashing) {
     qos: 1,
     retain: true,
   });
+  lastPublishedFlashing = flashing;
   logger.info("Published led_flashing", { flashing });
 }
 
+/**
+ * True when no package_exists has arrived recently enough to trust. capture.js
+ * publishes on every loop iteration, so silence means it is not running or its
+ * detection is failing - either way the last verdict is no longer evidence.
+ * @returns {boolean}
+ */
+function packageStateIsStale() {
+  const baseline = lastPackageExistsAt || serverStartedAt;
+  return Date.now() - baseline > LED_STALE_AFTER_MS;
+}
+
+function shouldLedFlash() {
+  // LED flashes when a RECENT capture says a package is there and we are not
+  // in cooldown. Staleness is part of the condition so a dead detector cannot
+  // leave the retained topic latched on.
+  return packageExists && !inCooldown() && !packageStateIsStale();
+}
+
 function updateLedState() {
-  // LED should flash when package exists AND not in cooldown
-  const shouldFlash = packageExists && !inCooldown();
-  publishLedFlashing(shouldFlash);
+  publishLedFlashing(shouldLedFlash());
 }
 
 function startCooldown() {
@@ -247,7 +271,28 @@ aedes.on("publish", (packet, client) => {
 
 mqttServer.listen(MQTT_PORT, () => {
   logger.info("MQTT broker running", { port: MQTT_PORT });
+  // A retained led_flashing from the previous run outlives this process. We
+  // start with no package verdict, so publish the honest state immediately
+  // rather than letting a stale `true` flash until the first capture arrives.
+  updateLedState();
 });
+
+// Nothing publishes package_exists except capture.js, so when capture.js stops
+// the retained led_flashing would keep its last value indefinitely. This is the
+// only loop that can notice that silence and clear it.
+const ledWatchdog = setInterval(() => {
+  const desired = shouldLedFlash();
+  if (desired === lastPublishedFlashing) return;
+
+  logger.warn("LED state drifted from retained value - republishing", {
+    packageExists,
+    inCooldown: inCooldown(),
+    stale: packageStateIsStale(),
+    retained: lastPublishedFlashing,
+    desired,
+  });
+  updateLedState();
+}, LED_WATCHDOG_INTERVAL_MS);
 
 // ============================================
 // HTTP Healthcheck Server
@@ -380,6 +425,8 @@ function shutdown() {
     clearTimeout(cooldownTimer);
     cooldownTimer = null;
   }
+
+  clearInterval(ledWatchdog);
 
   aedes.close(() => {
     logger.info("MQTT broker closed");
